@@ -1,0 +1,23 @@
+{
+  "timeZone": "America/New_York",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "GssEmail",
+        "libraryId": "19P1HnrZaDjBUjo-dpVX97iLmnhpVHq2Vh8BJdYjwAZxBETkXIePRw5AR",
+        "version": "1"
+      },
+      {
+        "userSymbol": "GssSheet",
+        "libraryId": "1ztCuxV_zkOaT0z2n81_8MXqFW1yMrTrjZydrskkeA5gLxdb_-nXu3XzZ",
+        "version": "1"
+      }
+    ]
+  },
+  "webapp": {
+    "executeAs": "USER_DEPLOYING",
+    "access": "ANYONE_ANONYMOUS"
+  }
+}

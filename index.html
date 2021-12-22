@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.blue-pink.min.css" />
+  <script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,100,500,300italic,500italic,700italic,900,300" />
+</head>
+<body>
+<div class="mdl-layout mdl-js-layout">
+  <main class="mdl-layout__content">
+
+    <!-- Two-column outer grid -->
+    <div class="mdl-grid">
+
+      <!-- Left side (desktop / tablet) / top (phone) -->
+      <div class="mdl-cell mdl-cell--6-col padding-top-bottom0">
+        <div class="mdl-grid">
+
+          <!-- Version -->
+          <div class="mdl-cell mdl-cell--12-col">
+            <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+              <select class="mdl-textfield__input" name="version" id="version"><option>Loading...</option></select>
+              <label class="mdl-textfield__label" for="version">Version</label>
+            </div>
+          </div>
+          <!-- End version -->
+
+          <!-- Book -->
+          <div class="mdl-cell mdl-cell--6-col mdl-cell--4-col-tablet mdl-cell--2-col-phone">
+            <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+              <select class="mdl-textfield__input" name="book" id="book"><option>Loading...</option></select>
+              <label class="mdl-textfield__label" for="book">Book</label>
+            </div>
+          </div>
+          <!-- End book -->
+
+          <!-- Chapter start -->
+          <div class="mdl-cell mdl-cell--3-col mdl-cell--2-col-tablet mdl-cell--1-col-phone">
+            <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+              <select class="mdl-textfield__input" name="chapterStart" id="chapterStart"><option value="1">1</option></select>
+              <label class="mdl-textfield__label" for="chapterStart">First chapter</label>
+            </div>
+          </div>
+          <!-- End chapter start -->
+
+          <!-- Chapter end -->
+          <div class="mdl-cell mdl-cell--3-col mdl-cell--2-col-tablet mdl-cell--1-col-phone">
+            <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+              <select class="mdl-textfield__input" name="chapterEnd" id="chapterEnd"><option value="1">1</option></select>
+              <label class="mdl-textfield__label" for="chapterEnd">Last chapter</label>
+            </div>
+          </div>
+          <!-- End chapter end -->
+
+        </div>
+      </div> 
+      <!-- End left side (desktop / tablet) / top (phone) -->
+
+      <!-- Right side (desktop / tablet) / bottom (phone) -->
+      <div class="mdl-cell mdl-cell--6-col padding-top-bottom0">        
+        <div class="mdl-grid">
+
+          <!-- Formatting options: left column -->
+          <div class="mdl-cell mdl-cell--6-col">
+            <div class="mdl-grid">
+
+              <!-- Chapter headers -->
+              <div class="mdl-cell mdl-cell--12-col">
+                <label class="mdl-switch mdl-js-switch" for="chapterHeaders">
+                  <input type="checkbox" class="mdl-switch__input" id="chapterHeaders">
+                  <span class="mdl-switch__label">Chapter headers</span>
+                </label>
+              </div>
+              <!-- End chapter headers -->
+              
+              <!-- Chapter page break -->
+              <div class="mdl-cell mdl-cell--12-col">
+                <label class="mdl-switch mdl-js-switch" for="chapterPageBreaks">
+                  <input type="checkbox" class="mdl-switch__input" id="chapterPageBreaks">
+                  <span class="mdl-switch__label">Chapter page breaks</span>
+                </label>
+              </div>
+              <!-- End chapter page break -->
+
+              <!-- Verse numbers -->
+              <div class="mdl-cell mdl-cell--12-col">
+                <label class="mdl-switch mdl-js-switch" for="verseNumbers">
+                  <input type="checkbox" class="mdl-switch__input" id="verseNumbers">
+                  <span class="mdl-switch__label">Verse numbers</span>
+                </label>
+              </div>
+              <!-- End verse numbers -->
+
+              <!-- Title page -->
+              <div class="mdl-cell mdl-cell--12-col">
+                <label class="mdl-switch mdl-js-switch" for="titlePage">
+                  <input type="checkbox" class="mdl-switch__input" id="titlePage">
+                  <span class="mdl-switch__label">Title page</span>
+                </label>
+              </div>
+              <!-- End title page -->
+
+            </div>
+          </div>
+          <!-- End formatting options: left column -->
+
+          <!-- Formatting options: right column -->
+          <div class="mdl-cell mdl-cell--6-col">
+            <div class="mdl-grid">
+
+              <!-- Font name & size-->
+              <div class="mdl-cell mdl-cell--8-col">
+                <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+                  <select class="mdl-textfield__input" name="fontName" id="fontName">
+                    <option value="Arial">Arial</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Roboto">Roboto</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                    <option value="Verdana">Verdana</option>
+                  </select>
+                  <label class="mdl-textfield__label" for="fontName">Font name</label>
+                </div>
+              </div>
+              <div class="mdl-cell mdl-cell--4-col">
+                <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+                  <input class="mdl-textfield__input" name="fontSize" id="fontSize" value="11" />
+                  <label class="mdl-textfield__label" for="fontSize">Font size</label>
+                </div>
+              </div>
+              <!-- End font name & size -->
+
+              <!-- Line spacing -->
+              <div class="mdl-cell mdl-cell--12-col">
+                <div class="mdl-textfield mdl-js-textfield mdl-textfield--floating-label">
+                  <input class="mdl-textfield__input" name="lineSpacing" id="lineSpacing" value="2" />
+                  <label class="mdl-textfield__label" for="lineSpacing">Line spacing</label>
+                </div>
+              </div>
+              <!-- End line spacing -->
+
+            </div>
+          </div>
+          <!-- End formatting options: right column -->
+
+        </div>
+      </div> 
+      <!-- End right side (desktop / tablet) / bottom (phone) -->
+
+    </div> 
+    <!-- End two-column outer div -->
+
+    <!-- Lower grid -->
+    <div class="mdl-grid">
+        
+      <!-- Create button, progress bar, status -->
+      <div class="mdl-cell mdl-cell--12-col">
+        <button class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--primary" id="createButton" disabled>Create Formatted Doc</button>
+      </div>
+      <div class="mdl-cell mdl-cell--12-col">
+        <div class="mdl-progress mdl-js-progress mdl-progress__indeterminate" id="progressBar" style="visibility:hidden"></div>
+      </div>
+      <div class="mdl-cell mdl-cell--12-col">
+        <div id="status"></div>
+      </div>
+      <!-- End create button, progress bar, status -->
+
+    </div>
+    <!-- End lower grid -->
+
+  </main>
+</div>
+<script>
+
+var params = <?!= JSON.stringify(params) ?>;
+//console.log(`params: ${JSON.stringify(params)}`);
+
+getTitlePageElement().checked = Object.keys(params).includes('titlePage') ? params.titlePage == true : false;
+getChapterHeadersElement().checked = Object.keys(params).includes('chapterHeaders') ? params.chapterHeaders == true : true;
+getChapterPageBreaksElement().checked = Object.keys(params).includes('chapterPageBreaks') ? params.chapterPageBreaks == true : true;
+getVerseNumbersElement().checked = Object.keys(params).includes('verseNumbers') ? params.verseNumbers == true: true;
+getFontNameElement().value = params.fontName || "Arial";
+getFontSizeElement().value = params.fontSize || 11;
+getLineSpacingElement().value = params.lineSpacing || 2;
+
+function finishedLoading() {
+  if (params.autorun)
+    onCreateButtonClicked();
+}
+
+function getBookElement() {
+  return document.getElementById("book");
+}
+
+function getBookId() {
+  return getBookElement().value;
+}
+
+function getChapterEndElement() {
+  return document.getElementById("chapterEnd");
+}
+
+function getChapterEndId() {
+  return getChapterEndElement().value;
+}
+
+function getChapterHeadersElement() {
+  return document.getElementById("chapterHeaders");
+}
+
+function getChapterHeadersChecked() {
+  return getChapterHeadersElement().checked;
+}
+
+function getChapterPageBreaksElement() {
+  return document.getElementById("chapterPageBreaks");
+}
+
+function getChapterPageBreaksChecked() {
+  return getChapterPageBreaksElement().checked;
+}
+
+function getChapterStartElement() {
+  return document.getElementById("chapterStart");
+}
+
+function getChapterStartId() {
+  return getChapterStartElement().value;
+}
+
+function getCreateButtonElement() {
+  return document.getElementById("createButton");
+}
+
+function getFontName() {
+  return getFontNameElement().value;
+}
+
+function getFontNameElement() {
+  return document.getElementById("fontName");
+}
+
+function getFontSize() {
+  return getFontSizeElement().value;
+}
+
+function getFontSizeElement() {
+  return document.getElementById("fontSize");
+}
+
+function getLineSpacing() {
+  return getLineSpacingElement().value;
+}
+
+function getLineSpacingElement() {
+  return document.getElementById("lineSpacing");
+}
+
+function getOptions() {
+  return {
+    chapterHeaders: getChapterHeadersChecked(),
+    chapterPageBreaks: getChapterPageBreaksChecked(),
+    fontName: getFontName(),
+    fontSize: getFontSize(),
+    lineSpacing: getLineSpacing(),
+    titlePage: getTitlePageChecked(),
+    verseNumbers: getVerseNumbersChecked(),
+  };
+}
+
+function getProgressBarElement() {
+  return document.getElementById("progressBar");
+}
+
+function getSelectedChapterList() {
+  let arr = [];
+  const chStartEl = getChapterStartElement();
+  const chEndEl = getChapterEndElement()
+  // Get to starting point
+  for (var i=0; chStartEl.options[i].value != chStartEl.options[chStartEl.selectedIndex].value; i++);
+  for (; chStartEl.options[i].value != chEndEl.options[chEndEl.selectedIndex].value; i++)
+    arr.push(chStartEl.options[i].value); // Add start to element - 1
+  arr.push(chStartEl.options[i].value); // Add last element
+  return arr;
+}
+
+function getTitlePageChecked() {
+  return getTitlePageElement().checked;
+}
+
+function getTitlePageElement() {
+  return document.getElementById("titlePage");
+}
+
+function getVerseNumbersChecked() {
+  return getVerseNumbersElement().checked;
+}
+
+function getVerseNumbersElement() {
+  return document.getElementById("verseNumbers");
+}
+
+function getVersionElement() {
+  return document.getElementById("version");
+}
+
+function getVersionId() {
+  return getVersionElement().value;
+}
+
+function onAddChapterSuccess(result, userObj) {
+  const docId = userObj.docId;
+  const addedChapterId = userObj.chapterId;
+  
+  // Update progress bar
+  const chapterList = getSelectedChapterList();
+  const addedChapterIndex = chapterList.indexOf(addedChapterId);
+  const percentComplete = (addedChapterIndex + 1) / chapterList.length * 100;
+  updateProgressBar(percentComplete);
+
+  if (addedChapterId != getChapterEndId()) {
+    // Add next chapter to doc
+    const nextChapterId = chapterList[addedChapterIndex + 1];
+    google.script.run
+      .withSuccessHandler(onAddChapterSuccess)
+      .withUserObject({docId: docId, chapterId: nextChapterId})
+      .addChapter(docId, getVersionId(), getBookId(), nextChapterId, getOptions());
+  } else {
+    // The doc is complete!
+    google.script.run
+      .withSuccessHandler(onFinalizeDocSuccess)
+      .withUserObject(docId)
+      .finalizeDoc(docId, getVersionId(), getBookId(), getChapterStartId(), getChapterEndId(), getOptions());
+  }
+}
+
+function onCreateButtonClicked() {
+  setAllControlsEnabled(false);
+  updateProgressBar(null);
+
+  google.script.run
+    .withSuccessHandler(onCreateGoogleDocSuccess)
+    .createGoogleDoc(getVersionId(), getBookId(), getChapterStartId(), getChapterEndId(), 
+      {subfolder: params.subfolder} );
+}
+
+function onCreateGoogleDocSuccess(docId) {
+  // Start progress bar
+  updateProgressBar(0);
+
+  // Add first chapter to doc
+  google.script.run
+    .withSuccessHandler(onAddChapterSuccess)
+    .withUserObject({docId: docId, chapterId: getChapterStartId()})
+    .addChapter(docId, getVersionId(), getBookId(), getChapterStartId(), getOptions());
+}
+
+function onFinalizeDocSuccess(result, docId) {
+  const docUrl = result.docUrl;
+  const docName = result.docName;
+
+  // Hide progress bar
+  getProgressBarElement().style.visibility = "hidden";    
+
+  // Create doc link
+  let pEl = document.createElement("p");
+  let textNode = document.createTextNode("Doc created: ");
+  pEl.appendChild(textNode);
+  document.getElementById("status").appendChild(pEl);
+    
+  let aEl = document.createElement("a");
+  textNode = document.createTextNode(docName);
+  aEl.setAttribute("href", docUrl);
+  aEl.setAttribute("target", "_new");
+  aEl.appendChild(textNode);
+  pEl.appendChild(aEl);
+
+  setAllControlsEnabled(true);
+}
+
+function onGetBookListSuccess(bookList) {
+  // Add books to book select element
+  getBookElement().options.length = 0;
+  for (let book of bookList) {
+    let option = document.createElement("option");
+    option.text = book.name;
+    option.value = book.id;
+    getBookElement().add(option);
+  }
+  
+  // Select initial book
+  getBookElement().value = params.bookId || "JHN";
+  
+  refreshChapterElements();
+}
+ 
+function onGetChapterListSuccess(chapterList) {
+  // Add chapters to chapter start and chapter end elements
+  getChapterStartElement().options.length = 0;
+  getChapterEndElement().options.length = 0;
+  for (let chapter of chapterList) {
+    let optionStart = document.createElement("option");
+    let optionEnd = document.createElement("option");
+    optionStart.text  = optionEnd.text  = chapter.num;
+    optionStart.value = optionEnd.value = chapter.id;
+    getChapterStartElement().add(optionStart);
+    getChapterEndElement().add(optionEnd);
+  }
+
+  // Select whole book if desired
+  if (params.wholeBook) {
+    getChapterStartElement().selectedIndex = 0;
+    getChapterEndElement().selectedIndex = getChapterEndElement().options.length - 1;
+  } else {
+    // Select initial chapters if supplied
+    if (params.chapterStartId)
+      getChapterStartElement().value = params.chapterStartId;
+    if (params.chapterEndId)
+      getChapterEndElement().value = params.chapterEndId;
+  }
+
+  setAllControlsEnabled(true);
+
+  finishedLoading();
+}
+
+function onGetVersionListSuccess(versionList) {
+  // Add versions to version select element
+  getVersionElement().options.length = 0;
+  for (let version of versionList) {
+    let option = document.createElement("option");
+    option.text = `${version.abbr} ${version.name}`;
+    option.versionAbbr = version.abbr;
+    option.versionName = version.name;
+    option.value = version.id;
+    getVersionElement().add(option);
+  }
+  
+  // Select initial version
+  getVersionElement().value = params.versionId || 59; // ESV
+  
+  refreshBookElement();
+}
+
+function refreshVersionElement() {
+  google.script.run
+    .withSuccessHandler(onGetVersionListSuccess)
+    .getVersionList("eng");
+}
+
+function refreshBookElement() {
+  // Disable elements until everything is loaded
+  getBookElement().disabled = true;
+  getChapterStartElement().disabled = true;
+  getChapterEndElement().disabled = true;
+  getCreateButtonElement().disabled = true;
+
+  google.script.run
+    .withSuccessHandler(onGetBookListSuccess)
+    .getBookList(getVersionId());
+}
+ 
+function refreshChapterElements() {
+  // Disable elements until everything is loaded
+  getChapterStartElement().disabled = true;
+  getChapterEndElement().disabled = true;
+  getCreateButtonElement().disabled = true;
+
+  google.script.run
+    .withSuccessHandler(onGetChapterListSuccess)
+    .getChapterList(getVersionId(),getBookId());
+}
+
+function setAllControlsEnabled(enabled) {
+  getVersionElement().disabled = !enabled;
+  getBookElement().disabled = !enabled;
+  getChapterStartElement().disabled = !enabled;
+  getChapterEndElement().disabled = !enabled;
+
+  getTitlePageElement().disabled = !enabled;
+  getChapterHeadersElement().disabled = !enabled;
+  getChapterPageBreaksElement().disabled = !enabled;
+  getVerseNumbersElement().disabled = !enabled;
+  getFontNameElement().disabled = !enabled;
+  getFontSizeElement().disabled = !enabled;
+  getLineSpacingElement().disabled = !enabled;
+
+  getCreateButtonElement().disabled = !enabled;  
+}
+
+function updateProgressBar(percentComplete) {
+  let progressBar = getProgressBarElement();
+  progressBar.style.visibility = "visible";
+  if (percentComplete !== null) {
+    progressBar.setAttribute("class", "mdl-progress mdl-js-progress");
+    progressBar.MaterialProgress.setProgress(percentComplete);
+  } else {
+    progressBar.setAttribute("class", "mdl-progress mdl-js-progress mdl-progress__indeterminate");
+  }
+}
+
+// Create button
+getCreateButtonElement().addEventListener('click', function() { onCreateButtonClicked() });
+
+// Load books whenever version is changed
+getVersionElement().onchange = function() { refreshBookElement() };
+
+// Load chapters whenever book is changed
+getBookElement().onchange = function() { refreshChapterElements() };
+  
+// Make sure chapterEnd is after chapterStart
+getChapterStartElement().onchange = function() { 
+  if (getChapterStartElement().selectedIndex > getChapterEndElement().selectedIndex)
+    getChapterEndElement().selectedIndex = getChapterStartElement().selectedIndex;
+};
+getChapterEndElement().onchange = function() {
+  if (getChapterStartElement().selectedIndex > getChapterEndElement().selectedIndex)
+    getChapterStartElement().selectedIndex = getChapterEndElement().selectedIndex;
+};
+
+// Load versions
+refreshVersionElement();
+
+</script>
+</body>
+</html>
