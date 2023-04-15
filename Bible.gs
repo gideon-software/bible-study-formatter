@@ -69,8 +69,8 @@ function getChapterXml(versionId, chapterId) {
 
   // First try loading from cache
   const cache = CacheService.getScriptCache();
-  const cachedXml = cache.get(fullChapterId);
-  if (cachedXml != null)
+  const cachedXml = "";//cache.get(fullChapterId);
+  if (cachedXml)
     return cachedXml;
 
   // No cache; load from bible.com
@@ -79,12 +79,16 @@ function getChapterXml(versionId, chapterId) {
   // We can't load the whole page via XmlService.parse(), so we have to get the section we need
   const html = UrlFetchApp.fetch(srcUrl).getContentText();
   
-  // Trim from <div class="book bk___"> to </div></div></div>
-  const regex = /.*(<div class="book bk.*<\/div>\s+<\/div>\s+<\/div>)\s+<\/div><\/div><\/div>.*/s; // s = dot matches single line
+  //const regex = /.*(<div class="book bk.*<\/div>\s+<\/div>\s+<\/div>)\s+<\/div><\/div><\/div>.*/s; // s = dot matches single line
+  const regex = /(<div class="ChapterContent_yv.*)<div class="ChapterContent_version-copyright/s;
+
   const matches = html.match(regex);
-  if (!matches)
+  if (!matches) {
+    if (!DEBUG_MODE)
+      GssEmail.sendDeveloperEmail("[BSF] Parsing issue", `srcUrl: ${srcUrl}`);
     return "";
-  const xml = matches[1];
+  }
+  const xml = matches[1]+"</div>"; // Hack but effective! Need for XML parser later
   try {
     cache.put(fullChapterId, xml, 21600);
   } catch (e) {
