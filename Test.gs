@@ -1,9 +1,19 @@
 function testAddChapter() {
   const docId = "1NV4Wilf5F4qj5lYgeoo8pp72j_QQdepj0YwEAJadxGw";
   const versionId = 59;
-  const bookId = "JER";
-  const chapterId = "JER.30";
-  addChapter(docId, versionId, bookId, chapterId);
+  const options = {
+    chapterHeaders: true,
+    chapterPageBreaks: true,
+    verseNumbers: true,
+    titlePage: false,
+    fontName: "Arial",
+    fontSize: 11,
+    lineSpacing: 2
+  }
+  //addChapter(docId, versionId, "JER", "JER.30", options);
+  //addChapter(docId, versionId, "JHN", "JHN.1", options);
+  addChapter(docId, versionId, "JHN", "JHN.8", options);
+  //addChapter(docId, versionId, "ROM", "ROM.1", options);
 }
 
 // Doesn't work yet!

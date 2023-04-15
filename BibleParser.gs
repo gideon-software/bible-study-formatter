@@ -10,6 +10,10 @@ var useCaps = false;
 var textDecorArr = [];
 var curChapter = 0;
 
+function test() {
+  testAddChapter();
+}
+
 function addChapterXmlToDoc(docId, versionId, bookId, xml, options) {
   const doc = DocumentApp.openById(docId);
   textDecorArr = [];
@@ -24,21 +28,24 @@ function addChapterXmlToDoc(docId, versionId, bookId, xml, options) {
 
 function addElementToDoc(doc, versionId, bookId, element, level, options) {
   let body = doc.getBody();
- 
-  if (DEBUG_MODE)
-    logElement(element,SPACE.repeat(2).repeat(level));
-  
+
+  if (DEBUG_MODE) {
+    logElement(element, SPACE.repeat(2).repeat(level));
+  }
+
   const elClass = getClassName(element);
   const elText = element.getText().trim();
- 
+
   //
   // Add element to doc
   //
-  const firstClassWord = getFirstWord(elClass);
+  const firstClassWord = elClass ? getFirstWord(elClass) : "SKIP"
   let skipChildren = false;
   let textDecor = {};
- 
-  switch (firstClassWord) {
+
+  const classWord = firstClassWord ? firstClassWord : elClass;
+
+  switch (classWord) {
     case "nb": // e.g. ESV John 8:1; Non-breaking
     case "im": // e.g. NIV intro
     case "ip": // e.g. NIV intro
@@ -51,7 +58,7 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
       addFormattedParagraph(body, options, "");
       needSpace = false;
       break;
- 
+
     case "pc": // e.g. NIV Daniel 5:25 (centered paragraph)
       addFormattedParagraph(body, options, "")
         .setAlignment(DocumentApp.HorizontalAlignment.CENTER);
@@ -65,7 +72,7 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
       needSpace = false;
       textDecor.type = DocumentApp.Attribute.ITALIC;
       break;
-      
+
     case "qs": // e.g. Selah
       // Insert some space
       body.editAsText().appendText(SPACE.repeat(4));
@@ -89,11 +96,11 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
     case "bd": // e.g. NET bold
       textDecor.type = DocumentApp.Attribute.BOLD;
       break;
- 
+
     case "sc": // e.g. ESV Daniel 5:25 (MENE, MENE, TEKEL, and PARSIN), NASB John 1:23 (TODO: not quite right)
     case "nd": // e.g. ESV Psalm 3 (Lord => LORD)
       useCaps = true;
-      break; 
+      break;
 
     case "q1": // Poetry indent 1
     case "qm1": // e.g. NIV Daniel 4
@@ -101,15 +108,15 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
       needSpace = false;
       q1Text.appendText(SPACE.repeat(4));
       break;
- 
+
     case "q2": // Poetry indent 2
     case "q3": // e.g. ESV Revelation 18:16
     case "qm2": // e.g. NIV Daniel 4
       let q2Text = addFormattedParagraph(body, options, "").editAsText();
-      needSpace = false; 
+      needSpace = false;
       q2Text.appendText(SPACE.repeat(8));
       break;
-      
+
     case "chapter": // Chapter heading
       curChapter = element.getChildren()[0].getText();  // will be chapter #
 
@@ -127,10 +134,10 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
         chapterHeading.setBold(0, len - 1, true);
       }
       break;
-    
+
     case "label": // Could be chapter or verse number; we only want verse
       if (getFirstWord(getClassName(element.getParentElement())) == "verse" &&
-          options.verseNumbers) {
+        options.verseNumbers) {
         let text = body.editAsText();
 
         // Add space if needed
@@ -153,7 +160,7 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
         needSpace = false; // Already added
       }
       break;
- 
+
     case "heading":
       // Only use if part of select elements
       // - ms (e.g. Ps 1, 42)
@@ -175,7 +182,7 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
           // Usually don't add a space if the first character of the new text is punctuation
           // Exception: if the last existing character is an opening parenthesis (e.g. Rom 4:19 ESV)
           if (!PUNCT.has(elText.charAt(0)) &&
-              text.getText().substr(-1).trim() != "(") {  // e.g. Rom 4:19 ESV
+            text.getText().substr(-1).trim() != "(") {  // e.g. Rom 4:19 ESV
             text.appendText(SPACE);
           }
         }
@@ -189,13 +196,13 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
         needSpace = true;
       }
       break;
- 
+
     case "note": // Note (important to skip as this contains "content" also; could check parent if need be)
     case "s": // Section heading
     case "s1": // Section heading
       skipChildren = true;
       break;
- 
+
     case "b": // Extra line break; ignore
     case "book": // Not needed
     case "verse": // Not needed
@@ -203,18 +210,25 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
     case "imt": // e.g. NIV intro
     case "ie": // e.g. NIV intro
     case "tl": // e.g. NIV Daniel 5:26
+
+    // 2023 additions
+    case "yv-bible-text":
+    case "bible-reader":
+    case "reader":
+    case "version vid59 iso6393eng":
+    case "SKIP": // h1, div w/o class, etc.
       break;
- 
+
     default: // Element we've missed!
       // Log it to general log
       logElement(element, `====================> `);
 
       // Log it in the missing element spreadsheet
       const isNewEntry = GssSheet.logUniqueEntry(LOG_SPREADSHEET, LOG_SHEET_MISSING_ELEMENTS,
-        [firstClassWord, getVersionAbbr(versionId), getBookName(versionId, bookId), curChapter]);
-      if (isNewEntry)
-        GssEmail.sendDeveloperEmail("[BSF] New missing element", 
-          `missing element: ${firstClassWord}; see BSF log`);
+        [classWord, getVersionAbbr(versionId), getBookName(versionId, bookId), curChapter]);
+      if (isNewEntry && !DEBUG_MODE)
+        GssEmail.sendDeveloperEmail("[BSF] New missing element",
+          `missing element: ${classWord}; see BSF log`);
 
       // Add note to the top of the doc; only do this once (i.e. use cache)
       const cache = CacheService.getUserCache();
@@ -229,7 +243,7 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
 
       break;
   }
- 
+
   // If we need text decor, note starting point before adding children (content)
   if (textDecor.type) {
     textDecor.start = body.editAsText().getText().length;
@@ -240,7 +254,7 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
     for (let child of element.getChildren())
       addElementToDoc(doc, versionId, bookId, child, level + 1, options);
   }
- 
+
   // If we need text decor, note ending point after adding children (content)
   if (textDecor.type) {
     textDecor.end = body.editAsText().getText().length;
@@ -277,21 +291,33 @@ function addTextDecor(doc) {
 }
 
 function getClassName(element) {
-  if (element !== 'undefined' && element.getAttribute("class") !== 'undefined')
-    return element.getAttribute("class").getValue().trim();
+  try {
+    if (element && element !== 'undefined' && element.getAttribute("class") && element.getAttribute("class") !== 'undefined')
+      return element.getAttribute("class").getValue().trim();
+  } catch (e) {
+    return "";
+  }
 }
 
 function getFirstWord(str) {
-  return str.replace(/ .*/,'');
+  if (!str)
+    return "";
+
+  // return str.replace(/ .*/,''); // old version
+  const regex = /ChapterContent_([^_]+)_+\w*/;
+  const matches = str.match(regex);
+  if (!matches)
+    return "";
+  return matches[1];
 }
 
-function logElement(element, prefixStr="") {
+function logElement(element, prefixStr = "") {
   const elName = element.getName();
   const elClass = getClassName(element);
   const elText = element.getText().trim();
- 
+
   if (elText)
-    Logger.log(`${prefixStr}${elName} ${elClass} [${elText}]`);
+    Logger.log(`element: ${prefixStr}${elName} ${elClass} [${elText}]`);
   else
-    Logger.log(`${prefixStr}${elName} ${elClass}`);
+    Logger.log(`element: ${prefixStr}${elName} ${elClass}`);
 }
