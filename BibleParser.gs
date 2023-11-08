@@ -18,7 +18,14 @@ function addChapterXmlToDoc(docId, versionId, bookId, xml, options) {
   const doc = DocumentApp.openById(docId);
   textDecorArr = [];
 
-  const xmlDoc = XmlService.parse(xml);
+  let xmlDoc = "";
+  try {
+    xmlDoc = XmlService.parse(xml);
+  } catch (e) {
+    // TODO: Handle this better for user's sake!!
+    if (!DEBUG_MODE)
+      GssEmail.sendDeveloperEmail("[BSF] XmlService parsing issue", `e: ${e}\n\nxml: ${xml}`);
+  }
   const root = xmlDoc.getRootElement();
   addElementToDoc(doc, versionId, bookId, root, 0, options);
   if (options.chapterPageBreaks)

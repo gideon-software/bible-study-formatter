@@ -373,7 +373,7 @@ function onFinalizeDocSuccess(result, docId) {
   let aEl = document.createElement("a");
   textNode = document.createTextNode(docName);
   aEl.setAttribute("href", docUrl);
-  aEl.setAttribute("target", "_new");
+  aEl.setAttribute("target", "_blank");
   aEl.appendChild(textNode);
   pEl.appendChild(aEl);
 

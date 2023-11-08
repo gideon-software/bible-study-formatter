@@ -69,7 +69,7 @@ function getChapterXml(versionId, chapterId) {
 
   // First try loading from cache
   const cache = CacheService.getScriptCache();
-  const cachedXml = "";//cache.get(fullChapterId);
+  const cachedXml = cache.get(fullChapterId);
   if (cachedXml)
     return cachedXml;
 
@@ -88,7 +88,16 @@ function getChapterXml(versionId, chapterId) {
       GssEmail.sendDeveloperEmail("[BSF] Parsing issue", `srcUrl: ${srcUrl}`);
     return "";
   }
-  const xml = matches[1]+"</div>"; // Hack but effective! Need for XML parser later
+  let xml = matches[1]+"</div>"; // Hack but effective! Need for XML parser later
+  
+  // Avoid invalid &nbsp; entity errors
+  // TODO: This is NOT a robust solution. There may be other entities that break stuff?
+  // https://stackoverflow.com/questions/21845839/how-to-parse-my-string-to-xml-with-nbsp-elements
+  // https://stackoverflow.com/questions/34904606/how-do-you-declare-a-the-nbsp-entity-in-xml-document
+  // https://stackoverflow.com/questions/4787700/xml-parsing-error-undefined-entity-special-characters
+  // https://stackoverflow.com/a/3805286
+  xml = xml.replace(/&nbsp;/ig, "&#160;");
+
   try {
     cache.put(fullChapterId, xml, 21600);
   } catch (e) {
