@@ -25,6 +25,8 @@ function addChapterXmlToDoc(docId, versionId, bookId, xml, options) {
     // TODO: Handle this better for user's sake!!
     if (!DEBUG_MODE)
       GssEmail.sendDeveloperEmail("[BSF] XmlService parsing issue", `e: ${e}\n\nxml: ${xml}`);
+    else
+      Logger.log("~~~~ Parsing issue! ~~~~");
   }
   const root = xmlDoc.getRootElement();
   addElementToDoc(doc, versionId, bookId, root, 0, options);
@@ -243,9 +245,9 @@ function addElementToDoc(doc, versionId, bookId, element, level, options) {
       if (cache.get(uniqueMissedId) == null) {
         cache.put(uniqueMissedId, true);
         doc.getBody().editAsText().insertText(0,
-          "\n***NOTE***: an unknown formatting element(s) were found in this document, " +
+          "\n***NOTE***: an unknown formatting element(s) was found in this document, " +
           "which may mean that some text is improperly formatted or even missing. " +
-          "The developer has been notified. Please forgive the inconvenience!\n");
+          "The developer has been notified.\n");
       }
 
       break;
@@ -324,7 +326,7 @@ function logElement(element, prefixStr = "") {
   const elText = element.getText().trim();
 
   if (elText)
-    Logger.log(`element: ${prefixStr}${elName} ${elClass} [${elText}]`);
+    Logger.log(`element: ${prefixStr}${elName} class: '${elClass}' text: '${elText}'`);
   else
-    Logger.log(`element: ${prefixStr}${elName} ${elClass}`);
+    Logger.log(`element: ${prefixStr}${elName} class: '${elClass}'`);
 }

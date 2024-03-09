@@ -1,7 +1,7 @@
 /**
  * Bible Study Formatter
  *
- * Copyright 2019-2021 Gideon Software <gideonsoftwaresolutions@gmail.com>
+ * Copyright 2019-2024 Gideon Software <gideonsoftwaresolutions@gmail.com>
 **/
 
 const DEBUG_MODE = false;
@@ -89,9 +89,10 @@ function doGet(e) {
 
 function finalizeDoc(docId, versionId, bookId, chapterStartId, chapterEndId, options) {
   const doc = DocumentApp.openById(docId);
+  const body = doc.getBody();
 
   // Change font
-  doc.getBody().editAsText()
+  body.editAsText()
    .setFontFamily(options.fontName)
    .setFontSize(options.fontSize);
 
@@ -100,8 +101,14 @@ function finalizeDoc(docId, versionId, bookId, chapterStartId, chapterEndId, opt
     addTitlePage(docId, versionId, bookId, chapterStartId, chapterEndId);
 
   // Remove first newline in doc
-  doc.getBody().getParagraphs()[0].removeFromParent();
+  body.getParagraphs()[0].removeFromParent();
   
+  // Set proper margins
+  body.setMarginTop(72);
+  body.setMarginBottom(72);
+  body.setMarginLeft(72);
+  body.setMarginRight(72);
+
   return { docUrl: doc.getUrl(), docName: doc.getName() }
 }
 
