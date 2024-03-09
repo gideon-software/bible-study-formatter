@@ -18,17 +18,24 @@ function addChapter(docId, versionId, bookId, chapterId, options={}) {
 function addTitlePage(docId, versionId, bookId, chapterStartId, chapterEndId) {
   const doc = DocumentApp.openById(docId);
   let body = doc.getBody();
-  let heading1 = getDocName(versionId, bookId, chapterStartId, chapterEndId, false);
+  let title = getDocName(versionId, bookId, chapterStartId, chapterEndId, false);
   let p = 0;
-  while (p <= 4)
-    body.insertParagraph(p++, "")
-    .setHeading(DocumentApp.ParagraphHeading.TITLE);
-  body.insertParagraph(p++, heading1)
-    .setHeading(DocumentApp.ParagraphHeading.TITLE)
-    .setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-  body.insertParagraph(p++, getVersionAbbr(versionId))
-    .setHeading(DocumentApp.ParagraphHeading.SUBTITLE)
-    .setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  while (p <= 8)
+    body.insertParagraph(p++, "");
+  
+  let titleStyle = {};
+  titleStyle[DocumentApp.Attribute.HORIZONTAL_ALIGNMENT] = DocumentApp.HorizontalAlignment.CENTER;
+  titleStyle[DocumentApp.Attribute.FONT_SIZE] = 21;
+  titleStyle[DocumentApp.Attribute.BOLD] = true;
+  body.insertParagraph(p++, title).setAttributes(titleStyle);
+
+  let subTitleStyle = {};
+  subTitleStyle[DocumentApp.Attribute.HORIZONTAL_ALIGNMENT] = DocumentApp.HorizontalAlignment.CENTER;
+  subTitleStyle[DocumentApp.Attribute.FONT_SIZE] = 11;
+  subTitleStyle[DocumentApp.Attribute.BOLD] = false;
+  subTitleStyle[DocumentApp.Attribute.ITALIC] = true;
+
+  body.insertParagraph(p++, getVersionAbbr(versionId)).setAttributes(subTitleStyle);
   body.insertPageBreak(p++);
   return docId;
 }
