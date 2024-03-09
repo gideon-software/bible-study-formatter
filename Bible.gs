@@ -1,3 +1,7 @@
+function test2() {
+  testAddChapter();
+}
+
 function getBookList(versionId) {
   let bookArr = [];
   
@@ -38,8 +42,10 @@ function getChapterList(versionId, bookId) {
   const cache = CacheService.getScriptCache();
   const uniqueId = `${versionId}-${bookId}-chapters`;
   const chaptersStr = cache.get(uniqueId);
-  if (chaptersStr != null)
+  if (chaptersStr != null) {
+    Logger.log("Loading chapter list from cache...");
     return JSON.parse(chaptersStr);
+  }
 
   const url = `https://www.bible.com/json/bible/books/${versionId}/${bookId}/chapters`;
   const json = UrlFetchApp.fetch(url).getContentText();
@@ -70,8 +76,10 @@ function getChapterXml(versionId, chapterId) {
   // First try loading from cache
   const cache = CacheService.getScriptCache();
   const cachedXml = cache.get(fullChapterId);
-  if (cachedXml)
+  if (cachedXml) {
+    Logger.log("Loading chapter XML from cache...");
     return cachedXml;
+  }
 
   // No cache; load from bible.com
   const srcUrl = `https://www.bible.com/bible/${fullChapterId}`;
@@ -79,16 +87,23 @@ function getChapterXml(versionId, chapterId) {
   // We can't load the whole page via XmlService.parse(), so we have to get the section we need
   const html = UrlFetchApp.fetch(srcUrl).getContentText();
   
-  //const regex = /.*(<div class="book bk.*<\/div>\s+<\/div>\s+<\/div>)\s+<\/div><\/div><\/div>.*/s; // s = dot matches single line
-  const regex = /(<div class="ChapterContent_yv.*)<div class="ChapterContent_version-copyright/s;
-
-  const matches = html.match(regex);
-  if (!matches) {
+  //const regex = /.*(<div class="book bk.*<\/div>\s+<\/div>\s+<\/div>)\s+<\/div><\/div><\/div>.*/s; // 
+  const regex = /(?<html><div class="ChapterContent_book.*<\/div>\s+<\/div>\s+<\/div>)\s+<\/div><\/div><\/div>/s; // s = dot matches single line
+  
+  const match = regex.exec(html);
+  if (!match) {
     if (!DEBUG_MODE)
       GssEmail.sendDeveloperEmail("[BSF] Parsing issue", `srcUrl: ${srcUrl}`);
+    Logger.log("No HTML match found!");
     return "";
+  } else {
+    if (DEBUG_MODE) {
+      Logger.log(`First 100 chars of match: '${match.groups['html'].slice(0, 99)}'`);
+      Logger.log(`Last 100 chars of match: '${match.groups['html'].slice(-100)}'`);
+    }
   }
-  let xml = matches[1]+"</div>"; // Hack but effective! Need for XML parser later
+
+  let xml = match.groups['html'];
   
   // Avoid invalid &nbsp; entity errors
   // TODO: This is NOT a robust solution. There may be other entities that break stuff?
@@ -98,13 +113,13 @@ function getChapterXml(versionId, chapterId) {
   // https://stackoverflow.com/a/3805286
   xml = xml.replace(/&nbsp;/ig, "&#160;");
 
-  try {
-    cache.put(fullChapterId, xml, 21600);
-  } catch (e) {
-    Logger.log("Can't cache xml", e);
+  if (!DEBUG_MODE) {
+    try {
+      cache.put(fullChapterId, xml, 21600);
+    } catch (e) {
+      Logger.log("Can't cache xml", e);
+    }
   }
-  if (DEBUG_MODE)
-    Logger.log(`XML:\n${xml}`);
   return xml;
 }
 

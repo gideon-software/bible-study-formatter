@@ -10,11 +10,11 @@ function testAddChapter() {
     fontSize: 11,
     lineSpacing: 2
   }
-  //addChapter(docId, versionId, "JER", "JER.30", options);
+  addChapter(docId, versionId, "JER", "JER.30", options);
   //addChapter(docId, versionId, "JHN", "JHN.1", options);
   //addChapter(docId, versionId, "JHN", "JHN.8", options);
   //addChapter(docId, versionId, "ROM", "ROM.1", options);
-  addChapter(docId, versionId, "EPH", "EPH.1", options);
+  //addChapter(docId, versionId, "EPH", "EPH.1", options);
 }
 
 // Doesn't work yet!
