@@ -1,7 +1,7 @@
 /**
  * Bible Study Formatter
  *
- * Copyright 2019-2024 Gideon Software <gideonsoftwaresolutions@gmail.com>
+ * Copyright 2019-2026 Gideon Software <gideonsoftwaresolutions@gmail.com>
 **/
 
 const DEBUG_MODE = false;
