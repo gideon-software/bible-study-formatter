@@ -312,12 +312,16 @@ function getFirstWord(str) {
   if (!str)
     return "";
 
-  // return str.replace(/ .*/,''); // old version
-  const regex = /ChapterContent_([^_]+)_+\w*/;
+  // Matches the semantic part at the end (e.g., captures "q1" from "ChapterContent-module__cat7xG__q1")
+  const regex = /ChapterContent-module__\w+__(\w+)/;
   const matches = str.match(regex);
-  if (!matches)
-    return "";
-  return matches[1];
+  
+  if (matches && matches[1]) {
+    return matches[1];
+  }
+  
+  // Fallback: If it's an old-style class without the module prefix, just return the first word
+  return str.split(' ')[0];
 }
 
 function logElement(element, prefixStr = "") {

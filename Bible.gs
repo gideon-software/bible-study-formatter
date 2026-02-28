@@ -122,8 +122,8 @@ function getChapterXml(versionId, chapterId) {
   // We can't load the whole page via XmlService.parse(), so we have to get the section we need
   const html = UrlFetchApp.fetch(srcUrl).getContentText();
 
-  //const regex = /.*(<div class="book bk.*<\/div>\s+<\/div>\s+<\/div>)\s+<\/div><\/div><\/div>.*/s; // 
-  const regex = /(?<html><div class="ChapterContent_book.*<\/div>\s+<\/div>\s+<\/div>)\s+<\/div><\/div><\/div>/s; // s = dot matches single line
+  //const regex = /(?<html><div class="ChapterContent-module__......__book.*<\/div>\s+<\/div>\s+<\/div>)\s+<\/div><\/div><\/div>/s; // s = dot matches single line
+  const regex = /(?<html><div class="ChapterContent-module__\w+__book.*?(?:<\/div>\s*){3})/s; // s = dot matches single line
 
   const match = regex.exec(html);
   if (!match) {
