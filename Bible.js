@@ -123,7 +123,7 @@ function getChapterXml(versionId, chapterId) {
   const html = UrlFetchApp.fetch(srcUrl).getContentText();
 
   //const regex = /(?<html><div class="ChapterContent-module__......__book.*<\/div>\s+<\/div>\s+<\/div>)\s+<\/div><\/div><\/div>/s; // s = dot matches single line
-  const regex = /(?<html><div class="ChapterContent-module__\w+__book.*?(?:<\/div>\s*){3})/s; // s = dot matches single line
+  const regex = /(?<html><div class="[^"]*?\b(?:\w+__)?(?:\w+_)?book\b.*?(?:<\/div>\s*){3})/s; // s = dot matches single line
 
   const match = regex.exec(html);
   if (!match) {

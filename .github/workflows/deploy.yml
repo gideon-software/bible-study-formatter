@@ -1,0 +1,46 @@
+name: Deploy Web App to Google Apps Script
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-and-deploy:
+    name: Test and Deploy Web App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Install clasp
+        run: npm install -g @google/clasp
+
+      - name: Authenticate clasp
+        run: |
+          echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+
+      - name: Push code to Apps Script
+        run: clasp push --force
+
+      - name: Create new version
+        run: clasp version "Release from ${{ github.sha }}"
+
+      - name: Deploy Web App
+        run: |
+          if [ -n "${{ secrets.DEPLOYMENT_ID }}" ]; then
+            echo "Redeploying existing Web App deployment ID..."
+            clasp deploy -i "${{ secrets.DEPLOYMENT_ID }}" -d "Release from ${{ github.sha }}"
+          else
+            echo "Notice: DEPLOYMENT_ID secret not set. Creating deployment..."
+            clasp deploy -d "Release from ${{ github.sha }}"
+          fi
