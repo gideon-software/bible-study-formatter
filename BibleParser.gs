@@ -312,16 +312,22 @@ function getFirstWord(str) {
   if (!str)
     return "";
 
-  // Matches the semantic part at the end (e.g., captures "q1" from "ChapterContent-module__cat7xG__q1")
-  const regex = /ChapterContent-module__\w+__(\w+)/;
-  const matches = str.match(regex);
+  // Get the first class if multiple classes are separated by spaces
+  const firstClass = str.split(' ')[0];
+
+  // Matches semantic part:
+  // e.g. "q1" from "cat7xG_q1" (new format),
+  // "ChapterContent-module__cat7xG__q1" (previous format),
+  // or "ChapterContent_q1_..." (older format)
+  const regex = /(?:ChapterContent-module__\w+__|^[a-zA-Z0-9]+_|^ChapterContent_)(\w+)/;
+  const matches = firstClass.match(regex);
   
   if (matches && matches[1]) {
     return matches[1];
   }
   
-  // Fallback: If it's an old-style class without the module prefix, just return the first word
-  return str.split(' ')[0];
+  // Fallback: If it's a plain class without prefix, return the first class name
+  return firstClass;
 }
 
 function logElement(element, prefixStr = "") {
