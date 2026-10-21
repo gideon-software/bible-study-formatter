@@ -1,14 +1,35 @@
 {
   "name": "bible-study-formatter",
-  "version": "1.0.0",
-  "description": "Formats Bible text from Bible.com into customized Google Docs",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
-    "test": "node --test",
-    "test:unit": "node --test tests/bible.test.js tests/parser.test.js",
-    "test:integration": "node --test tests/integration.test.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "tsx --test src/**/*.test.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "cheerio": "^1.2.0",
+    "drizzle-orm": "^0.45.4",
+    "googleapis": "^187.0.0",
+    "lucide-react": "^1.61.0",
+    "next": "16.4.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "resend": "^6.34.1"
   },
   "devDependencies": {
-    "@types/google-apps-script": "^1.0.83"
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
   }
 }

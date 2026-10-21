@@ -1,0 +1,36 @@
+name: Daily Bible Canary Health Check
+
+on:
+  schedule:
+    # Run every day at 08:00 UTC (4:00 AM EDT)
+    - cron: '0 8 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  canary-check:
+    name: Run Canary Health Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Ping Canary API endpoint
+        if: env.CANARY_ENDPOINT_URL != ''
+        env:
+          CANARY_ENDPOINT_URL: ${{ secrets.CANARY_ENDPOINT_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -f -H "Authorization: Bearer $CRON_SECRET" "$CANARY_ENDPOINT_URL"
