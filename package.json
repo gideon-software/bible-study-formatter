@@ -4,7 +4,7 @@
   "description": "Formats Bible text from Bible.com into customized Google Docs",
   "private": true,
   "scripts": {
-    "test": "node --test tests/**/*.test.js",
+    "test": "node --test",
     "test:unit": "node --test tests/bible.test.js tests/parser.test.js",
     "test:integration": "node --test tests/integration.test.js"
   },
