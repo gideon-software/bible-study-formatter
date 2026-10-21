@@ -28,6 +28,24 @@ jobs:
       - name: Authenticate clasp
         run: |
           echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+          node -e "
+            const fs = require('fs');
+            const os = require('os');
+            const p = os.homedir() + '/.clasprc.json';
+            try {
+              const rc = JSON.parse(fs.readFileSync(p, 'utf8'));
+              if (rc.tokens && rc.tokens.gss) {
+                rc.tokens.default = rc.tokens.gss;
+                fs.writeFileSync(p, JSON.stringify(rc, null, 2));
+                console.log('Switched default clasp user to gss profile');
+              }
+            } catch (err) {
+              console.error('Warning while parsing .clasprc.json:', err);
+            }
+          "
+
+      - name: Verify authorized clasp user
+        run: clasp show-authorized-user
 
       - name: Push code to Apps Script
         run: clasp push --force
