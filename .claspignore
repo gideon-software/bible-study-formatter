@@ -1,0 +1,15 @@
+# Ignore node modules and package files
+node_modules/**
+package.json
+package-lock.json
+
+# Ignore test suite and CI workflows
+tests/**
+.github/**
+
+# Ignore config and project files
+.git/**
+.gitignore
+.clasp.json
+.clasprc.json
+README.md
