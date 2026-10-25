@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, connection } from "next/server";
 import { db } from "@/lib/db";
 import { executions, missingElements } from "@/lib/db/schema";
 import { desc, sql } from "drizzle-orm";
 
 export async function GET() {
+  await connection();
 
   // If DB is connected, run real SQL aggregations
   if (db) {

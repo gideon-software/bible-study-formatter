@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Canary check failed",
+        error: details || "Canary check failed",
       },
       { status: 500 }
     );
