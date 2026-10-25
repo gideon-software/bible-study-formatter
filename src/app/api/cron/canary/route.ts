@@ -43,13 +43,14 @@ export async function GET(request: Request) {
       durationMs,
       timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Canary] Daily health check failure:", error);
+    const details = error instanceof Error ? error.message : String(error);
 
     await sendAlert({
       type: "canary_failure",
       title: "Daily Bible Format Health Check Failed",
-      details: error.message || String(error),
+      details,
     });
 
     return NextResponse.json(

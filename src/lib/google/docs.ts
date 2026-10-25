@@ -1,6 +1,5 @@
 import { google, docs_v1 } from "googleapis";
 import {
-  DocParagraph,
   FormatOptions,
   ParsedChapter,
   ESV_SHORT_CREDIT,

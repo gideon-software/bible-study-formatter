@@ -36,10 +36,11 @@ export async function GET(request: Request) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Auth] Google callback error:", error);
+    const message = error instanceof Error ? error.message : "auth_failed";
     return NextResponse.redirect(
-      new URL(`/?auth_error=${encodeURIComponent(error.message || "auth_failed")}`, request.url)
+      new URL(`/?auth_error=${encodeURIComponent(message)}`, request.url)
     );
   }
 }

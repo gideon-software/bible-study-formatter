@@ -1,31 +1,9 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { executions, missingElements } from "@/lib/db/schema";
-import { desc, sql, eq } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("bsf_session");
-
-  // In production, enforce admin email check.
-  // In development, if no DB or auth, provide fallback/mock data so admin page is viewable.
-  let isAdmin = false;
-  if (sessionCookie) {
-    try {
-      const session = JSON.parse(sessionCookie.value);
-      const adminEmails = (process.env.ADMIN_EMAILS || "")
-        .split(",")
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean);
-      if (
-        session.user?.email &&
-        (adminEmails.length === 0 || adminEmails.includes(session.user.email.toLowerCase()))
-      ) {
-        isAdmin = true;
-      }
-    } catch {}
-  }
 
   // If DB is connected, run real SQL aggregations
   if (db) {

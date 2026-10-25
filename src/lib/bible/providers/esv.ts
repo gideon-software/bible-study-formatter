@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import type { AnyNode, Element } from "domhandler";
 import {
   DocParagraph,
   FormatOptions,
@@ -114,15 +115,15 @@ export function parseEsvHtml(
  */
 function extractRuns(
   $: cheerio.CheerioAPI,
-  $parent: cheerio.Cheerio<any>,
+  $parent: cheerio.Cheerio<AnyNode>,
   options: FormatOptions,
   chapterNum: number
 ): TextRun[] {
   const runs: TextRun[] = [];
 
-  function traverse(node: any, currentStyle: { bold?: boolean; italic?: boolean }) {
+  function traverse(node: AnyNode, currentStyle: { bold?: boolean; italic?: boolean }) {
     if (node.type === "text") {
-      const text = node.data;
+      const text = (node as { data?: string }).data;
       if (text) {
         runs.push({
           text,
@@ -133,7 +134,8 @@ function extractRuns(
     }
 
     if (node.type === "tag") {
-      const $node = $(node);
+      const elem = node as Element;
+      const $node = $(elem);
 
       // Handle Verse Numbers
       if ($node.hasClass("verse-num")) {
@@ -156,10 +158,10 @@ function extractRuns(
         return;
       }
 
-      const isBold = currentStyle.bold || node.name === "b" || node.name === "strong";
-      const isItalic = currentStyle.italic || node.name === "i" || node.name === "em";
+      const isBold = currentStyle.bold || elem.name === "b" || elem.name === "strong";
+      const isItalic = currentStyle.italic || elem.name === "i" || elem.name === "em";
 
-      node.children?.forEach((child: any) => {
+      elem.children?.forEach((child) => {
         traverse(child, { bold: isBold, italic: isItalic });
       });
     }

@@ -25,7 +25,7 @@ export async function GET() {
       user: session.user,
       isAdmin,
     });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ authenticated: false, user: null });
   }
 }

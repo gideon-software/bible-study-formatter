@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   BarChart3,
   Users,
@@ -15,27 +16,78 @@ import {
   ExternalLink,
 } from "lucide-react";
 
-export default function AdminPage() {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [canaryRunning, setCanaryRunning] = useState(false);
-  const [canaryResult, setCanaryResult] = useState<any>(null);
+interface AdminStats {
+  totalExecutions: number;
+  uniqueUsers: number;
+  topBooks: Array<{ bookName: string; count: number }>;
+  monthlyData: Array<{ month: string; count: number }>;
+  chapterAnalysis: Array<{ isMulti: boolean; count: number }>;
+  recent: Array<{
+    id: string;
+    bookName: string;
+    chapterStart: number;
+    chapterEnd: number;
+    versionAbbr: string;
+    userEmail: string | null;
+    docUrl: string;
+    durationMs: number | null;
+    createdAt: string;
+  }>;
+  missingElements: Array<{
+    id: string;
+    tagName: string;
+    sampleHtml: string;
+    occurrenceCount: number;
+    lastSeenAt: string;
+  }>;
+  isLiveDb?: boolean;
+}
 
-  const fetchStats = async () => {
-    setLoading(true);
+interface CanaryResult {
+  success?: boolean;
+  status?: string;
+  chapter?: string;
+  paragraphCount?: number;
+  durationMs?: number;
+  error?: string;
+}
+
+export default function AdminPage() {
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [canaryRunning, setCanaryRunning] = useState(false);
+  const [canaryResult, setCanaryResult] = useState<CanaryResult | null>(null);
+
+  const fetchStats = useCallback(async () => {
+    setIsRefreshing(true);
     try {
       const res = await fetch("/api/admin/stats");
-      const data = await res.json();
+      const data = (await res.json()) as AdminStats;
       setStats(data);
     } catch (err) {
       console.error("Failed to load admin stats:", err);
     } finally {
-      setLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchStats();
+    let ignore = false;
+    async function loadInitial() {
+      try {
+        const res = await fetch("/api/admin/stats");
+        const data = (await res.json()) as AdminStats;
+        if (!ignore) {
+          setStats(data);
+        }
+      } catch (err) {
+        console.error("Failed to load initial admin stats:", err);
+      }
+    }
+    loadInitial();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const runCanaryCheck = async () => {
@@ -43,29 +95,30 @@ export default function AdminPage() {
     setCanaryResult(null);
     try {
       const res = await fetch("/api/cron/canary");
-      const data = await res.json();
+      const data = (await res.json()) as CanaryResult;
       setCanaryResult(data);
-    } catch (err: any) {
-      setCanaryResult({ success: false, error: err.message });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err.message : "Canary request failed";
+      setCanaryResult({ success: false, error });
     } finally {
       setCanaryRunning(false);
     }
   };
 
   const multiChapterStats = stats?.chapterAnalysis || [];
-  const singleCount = multiChapterStats.find((s: any) => !s.isMulti)?.count || 0;
-  const multiCount = multiChapterStats.find((s: any) => s.isMulti)?.count || 0;
+  const singleCount = multiChapterStats.find((s) => !s.isMulti)?.count || 0;
+  const multiCount = multiChapterStats.find((s) => s.isMulti)?.count || 0;
   const totalAnalyzed = singleCount + multiCount || 1;
   const multiPercentage = Math.round((multiCount / totalAnalyzed) * 100);
 
   // Maximum count for normalizing monthly chart bars
   const maxMonthlyCount = stats?.monthlyData?.length
-    ? Math.max(...stats.monthlyData.map((m: any) => Number(m.count)))
+    ? Math.max(...stats.monthlyData.map((m) => Number(m.count)))
     : 1;
 
   // Maximum count for top books bars
   const maxBookCount = stats?.topBooks?.length
-    ? Math.max(...stats.topBooks.map((b: any) => Number(b.count)))
+    ? Math.max(...stats.topBooks.map((b) => Number(b.count)))
     : 1;
 
   return (
@@ -74,7 +127,7 @@ export default function AdminPage() {
       <header className="app-header">
         <div className="brand">
           <div className="brand-icon">
-            <BarChart3 size={24} />
+            <Activity size={24} />
           </div>
           <div>
             <h1>Admin & Usage Intelligence</h1>
@@ -83,12 +136,12 @@ export default function AdminPage() {
         </div>
 
         <div className="header-actions">
-          <button className="btn btn-secondary btn-sm" onClick={fetchStats} title="Refresh stats">
-            <RefreshCw size={14} /> Refresh
+          <button className="btn btn-secondary btn-sm" onClick={fetchStats} disabled={isRefreshing} title="Refresh stats">
+            <RefreshCw size={14} className={isRefreshing ? "spin" : ""} /> Refresh
           </button>
-          <a href="/" className="btn btn-primary btn-sm">
+          <Link href="/" className="btn btn-primary btn-sm">
             <ArrowLeft size={14} /> Back to Formatter
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -110,7 +163,7 @@ export default function AdminPage() {
 
         <div className="metric-card">
           <div className="metric-label" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <Layers size={15} color="var(--accent-amber)" /> Multi-Chapter Rate
+            <Layers size={15} color="var(--accent-amber)" /> Multi-Chapter Exports
           </div>
           <div className="metric-value">{multiPercentage}%</div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-subtle)" }}>
@@ -120,13 +173,13 @@ export default function AdminPage() {
 
         <div className="metric-card">
           <div className="metric-label" style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <Activity size={15} color="var(--accent-emerald)" /> System Health
+            <Activity size={15} color="var(--accent-emerald)" /> System Status
           </div>
           <div className="metric-value" style={{ fontSize: "1.4rem", color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <CheckCircle2 size={24} /> Operational
+            <CheckCircle2 size={20} /> Operational
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-subtle)" }}>
-            {stats?.isLiveDb ? "Connected to Neon DB" : "Preview Mode"}
+            Neon Postgres {stats?.isLiveDb ? "(Live Connected)" : "(Fallback Mode)"}
           </div>
         </div>
       </div>
@@ -143,7 +196,7 @@ export default function AdminPage() {
           </p>
 
           <div className="chart-bar-container">
-            {stats?.monthlyData?.map((item: any) => {
+            {stats?.monthlyData?.map((item) => {
               const heightPercent = Math.max(8, Math.round((Number(item.count) / maxMonthlyCount) * 100));
               return (
                 <div key={item.month} className="chart-bar-column">
@@ -168,7 +221,7 @@ export default function AdminPage() {
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {stats?.topBooks?.slice(0, 6).map((book: any, idx: number) => {
+            {stats?.topBooks?.slice(0, 6).map((book, idx) => {
               const widthPercent = Math.max(6, Math.round((Number(book.count) / maxBookCount) * 100));
               return (
                 <div key={book.bookName} style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
@@ -200,15 +253,18 @@ export default function AdminPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <h2 className="section-title">
-              <Activity size={18} color="var(--accent-emerald)" /> Daily Canary Health Check
+              <Activity size={18} color="var(--accent-emerald)" /> Real-Time Bible Canary Health Check
             </h2>
             <p style={{ fontSize: "0.825rem", color: "var(--text-subtle)", marginTop: "0.2rem" }}>
-              Runs an end-to-end test against the Crossway ESV API to verify semantic classes, latency, and parser integrity.
+              Runs a live passage fetch and parser test (Romans 8:1-4) to verify Crossway ESV API & AST pipeline.
             </p>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={runCanaryCheck} disabled={canaryRunning}>
-            <RefreshCw size={14} className={canaryRunning ? "animate-spin" : ""} />
-            {canaryRunning ? "Running Test..." : "Run Canary Test Now"}
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={runCanaryCheck}
+            disabled={canaryRunning}
+          >
+            {canaryRunning ? "Running Diagnostics..." : "Trigger Canary Test"}
           </button>
         </div>
 
@@ -217,7 +273,7 @@ export default function AdminPage() {
             style={{
               marginTop: "1rem",
               padding: "1rem",
-              borderRadius: "var(--radius-md)",
+              borderRadius: "var(--radius-sm)",
               background: canaryResult.success ? "rgba(16, 185, 129, 0.1)" : "rgba(244, 63, 94, 0.1)",
               border: `1px solid ${canaryResult.success ? "rgba(16, 185, 129, 0.3)" : "rgba(244, 63, 94, 0.3)"}`,
               fontSize: "0.85rem",
@@ -227,23 +283,25 @@ export default function AdminPage() {
               <div style={{ color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <CheckCircle2 size={16} />
                 <span>
-                  <strong>Canary Passed:</strong> Parsed {canaryResult.chapter} ({canaryResult.paragraphCount} paragraphs) in {canaryResult.durationMs}ms.
+                  <strong>Healthy:</strong> Parsed {canaryResult.chapter} ({canaryResult.paragraphCount} paragraphs) in {canaryResult.durationMs}ms
                 </span>
               </div>
             ) : (
               <div style={{ color: "var(--accent-rose)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <AlertTriangle size={16} />
-                <span><strong>Canary Failed:</strong> {canaryResult.error}</span>
+                <span>
+                  <strong>Check Failed:</strong> {canaryResult.error}
+                </span>
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Recent Executions Log */}
+      {/* Recent Activity Table */}
       <div className="glass-panel" style={{ padding: "1.75rem" }}>
         <h2 className="section-title" style={{ marginBottom: "1rem" }}>
-          <FileText size={18} color="var(--primary)" /> Recent Generations Log
+          <Layers size={18} color="var(--primary)" /> Recent Generations Log
         </h2>
 
         <div style={{ overflowX: "auto" }}>
@@ -259,7 +317,7 @@ export default function AdminPage() {
               </tr>
             </thead>
             <tbody>
-              {stats?.recent?.map((item: any) => (
+              {stats?.recent?.map((item) => (
                 <tr key={item.id}>
                   <td style={{ color: "var(--text-subtle)", whiteSpace: "nowrap" }}>
                     {new Date(item.createdAt).toLocaleString(undefined, {

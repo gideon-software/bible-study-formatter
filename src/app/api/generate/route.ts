@@ -190,20 +190,21 @@ export async function POST(request: Request) {
       docName: docResult.docName,
       durationMs,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Generate] Doc generation failure:", error);
+    const details = error instanceof Error ? error.message : String(error);
 
     // Send immediate failure alert
     await sendAlert({
       type: "api_error",
       title: "Document Generation Failed",
-      details: error.message || String(error),
+      details,
     });
 
     return NextResponse.json(
       {
         error: "Generation Failed",
-        message: error.message || "An unexpected error occurred while creating your document.",
+        message: details || "An unexpected error occurred while creating your document.",
       },
       { status: 500 }
     );

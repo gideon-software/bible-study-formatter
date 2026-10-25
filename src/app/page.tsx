@@ -21,7 +21,6 @@ import {
   Moon,
   Sun,
   ShieldCheck,
-  CheckCircle2,
   AlertCircle,
 } from "lucide-react";
 
@@ -41,8 +40,6 @@ export default function Home() {
 
   // Auth state
   const [user, setUser] = useState<{ name?: string; email?: string; picture?: string } | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // Form selections
   const [versionId, setVersionId] = useState("ESV");
@@ -80,12 +77,6 @@ export default function Home() {
     [versionId, bookId, chapterStart, chapterEnd]
   );
 
-  // Adjust chapter selectors when book changes
-  useEffect(() => {
-    if (chapterStart > chapters.length) setChapterStart(1);
-    if (chapterEnd > chapters.length) setChapterEnd(chapters.length || 1);
-  }, [bookId, chapters]);
-
   // Toggle theme
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -99,16 +90,21 @@ export default function Home() {
         const data = await res.json();
         if (data.authenticated && data.user) {
           setUser(data.user);
-          setIsAdmin(Boolean(data.isAdmin));
         }
       } catch (err) {
         console.error("Auth status error:", err);
-      } finally {
-        setIsAuthLoading(false);
       }
     }
     checkAuth();
   }, []);
+
+  // Handle book selection change
+  const handleBookChange = (newBookId: string) => {
+    setBookId(newBookId);
+    const newChapters = getBookChapters(newBookId);
+    setChapterStart(1);
+    setChapterEnd(newChapters.length || 1);
+  };
 
   // Handle whole book selection
   const handleSelectWholeBook = () => {
@@ -134,6 +130,7 @@ export default function Home() {
   // Trigger Doc Creation
   const handleCreateDoc = async () => {
     if (!user) {
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/api/auth/google/login";
       return;
     }
@@ -164,6 +161,7 @@ export default function Home() {
 
       if (!response.ok) {
         if (result.needsAuth) {
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           window.location.href = "/api/auth/google/login";
           return;
         }
@@ -177,8 +175,9 @@ export default function Home() {
         url: result.docUrl,
         name: result.docName,
       });
-    } catch (err: any) {
-      setErrorMsg(err.message || "Failed to create document.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to create document.";
+      setErrorMsg(msg);
       setStatusMessage("");
     } finally {
       setIsGenerating(false);
@@ -221,6 +220,7 @@ export default function Home() {
           {user ? (
             <div className="user-pill">
               {user.picture ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={user.picture} alt="Avatar" className="user-avatar" />
               ) : null}
               <span>{user.name || user.email}</span>
@@ -286,7 +286,7 @@ export default function Home() {
               <select
                 className="field-select"
                 value={bookId}
-                onChange={(e) => setBookId(e.target.value)}
+                onChange={(e) => handleBookChange(e.target.value)}
               >
                 <optgroup label="Old Testament">
                   {BIBLE_BOOKS.filter((b) => b.testament === "OT").map((b) => (
