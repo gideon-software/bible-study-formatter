@@ -64,5 +64,17 @@ describe("Bible Books & Utilities", () => {
     const romFullCheck = validateEsvPassageRange("ROM", 1, 16);
     assert.strictEqual(romFullCheck.allowed, false);
     assert(romFullCheck.reason?.includes("Crossway ESV policy limits"));
+
+    // Luke 1–12 has 625 verses (even though 12 chapters is 50% of 24, 625 > 500 verses)
+    const lukeHalfCheck = validateEsvPassageRange("LUK", 1, 12);
+    assert.strictEqual(lukeHalfCheck.allowed, false);
+    assert.strictEqual(lukeHalfCheck.verseCount, 625);
+    assert(lukeHalfCheck.reason?.includes("625 verses"));
+    assert(lukeHalfCheck.reason?.includes("select up to chapters 1–9"));
+
+    // Luke 1–9 has 470 verses (<= 500 verses and <= 12 chapters)
+    const luke9Check = validateEsvPassageRange("LUK", 1, 9);
+    assert.strictEqual(luke9Check.allowed, true);
+    assert.strictEqual(luke9Check.verseCount, 470);
   });
 });

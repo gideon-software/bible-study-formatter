@@ -1,3 +1,5 @@
+import { BIBLE_CHAPTER_VERSES } from "./verseCounts";
+
 export interface BookInfo {
   id: string; // 3-letter USFM code, e.g. "GEN", "JHN"
   name: string;
@@ -206,14 +208,33 @@ export const ESV_SHORT_CREDIT =
   "Scripture quotations from the ESV® Bible, © 2001 Crossway. Used by permission.";
 
 /**
+ * Calculates the exact number of verses in a chapter range
+ */
+export function getPassageVerseCount(
+  bookId: string,
+  chapterStart: number,
+  chapterEnd: number
+): number {
+  const verses = BIBLE_CHAPTER_VERSES[bookId.toUpperCase()];
+  if (!verses) return 0;
+  let total = 0;
+  for (let ch = chapterStart; ch <= chapterEnd && ch <= verses.length; ch++) {
+    total += verses[ch - 1] || 0;
+  }
+  return total;
+}
+
+/**
  * Validates whether the requested chapter range complies with Crossway's
- * free API distribution guidelines (max 500 verses / half a book).
+ * free API distribution guidelines:
+ * "Up to 500 verses or half a book, whichever is less (excepting single-chapter
+ * and double-chapter books)." - https://api.esv.org/#conditions
  */
 export function validateEsvPassageRange(
   bookId: string,
   chapterStart: number,
   chapterEnd: number
-): { allowed: boolean; reason?: string } {
+): { allowed: boolean; reason?: string; verseCount?: number } {
   if (!ESV_POLICY_LIMITS.enforceLimits) {
     return { allowed: true };
   }
@@ -221,21 +242,58 @@ export function validateEsvPassageRange(
   const book = getBookById(bookId);
   if (!book) return { allowed: false, reason: "Invalid book ID" };
 
+  const totalVerses = getPassageVerseCount(bookId, chapterStart, chapterEnd);
+
   // 1- and 2-chapter books are explicitly exempt from the half-book limit per Crossway terms
   if (book.numChapters <= 2) {
-    return { allowed: true };
+    if (totalVerses > 500) {
+      return {
+        allowed: false,
+        verseCount: totalVerses,
+        reason: `Crossway ESV policy limits exports to 500 verses. This passage contains ${totalVerses} verses.`,
+      };
+    }
+    return { allowed: true, verseCount: totalVerses };
   }
 
   const numSelectedChapters = chapterEnd - chapterStart + 1;
   const maxAllowedChapters = Math.ceil(book.numChapters / 2);
 
-  if (numSelectedChapters > maxAllowedChapters) {
+  // Condition 1: Check 500-verse cap
+  if (totalVerses > 500) {
+    // Calculate how many chapters fit under 500 verses
+    let runningVerses = 0;
+    let suggestedEnd = chapterStart;
+    const versesArr = BIBLE_CHAPTER_VERSES[bookId.toUpperCase()] || [];
+    for (let ch = chapterStart; ch <= book.numChapters; ch++) {
+      const chVerses = versesArr[ch - 1] || 0;
+      if (runningVerses + chVerses > 500) break;
+      runningVerses += chVerses;
+      suggestedEnd = ch;
+    }
+
+    const rangeStr =
+      suggestedEnd === chapterStart
+        ? `chapter ${chapterStart}`
+        : `chapters ${chapterStart}–${suggestedEnd}`;
+
     return {
       allowed: false,
-      reason: `Crossway ESV policy limits single-document exports to half a book (max ${maxAllowedChapters} chapters for ${book.name}). To format all of ${book.name}, export in two parts (e.g. chapters 1–${maxAllowedChapters} and ${maxAllowedChapters + 1}–${book.numChapters}).`,
+      verseCount: totalVerses,
+      reason: `Crossway ESV policy limits single exports to 500 verses or half a book, whichever is less. ${book.name} ${chapterStart}–${chapterEnd} contains ${totalVerses} verses (exceeding the 500-verse cap). To stay within guidelines, select up to ${rangeStr} (${runningVerses} verses), or export in smaller sections.`,
     };
   }
 
-  return { allowed: true };
+  // Condition 2: Check half-book cap
+  if (numSelectedChapters > maxAllowedChapters) {
+    return {
+      allowed: false,
+      verseCount: totalVerses,
+      reason: `Crossway ESV policy limits single exports to 500 verses or half a book, whichever is less. You selected ${numSelectedChapters} of ${book.numChapters} chapters (exceeding 50% of ${book.name}). To format ${book.name}, export in parts (e.g. chapters 1–${maxAllowedChapters} and ${maxAllowedChapters + 1}–${book.numChapters}).`,
+    };
+  }
+
+  return { allowed: true, verseCount: totalVerses };
 }
+
 
