@@ -14,14 +14,14 @@ import {
   BookOpen,
   FileText,
   Settings2,
-  Sparkles,
   ExternalLink,
-  LogIn,
   LogOut,
   ShieldCheck,
   AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { GoogleLogo } from "@/components/GoogleLogo";
 
 const FONT_FAMILY_MAP: Record<string, string> = {
   Arial: "Arial, Helvetica, sans-serif",
@@ -37,6 +37,7 @@ export default function Home() {
 
   // Auth state
   const [user, setUser] = useState<{ name?: string; email?: string; picture?: string } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Form selections
   const [versionId, setVersionId] = useState("ESV");
@@ -83,6 +84,10 @@ export default function Home() {
         const data = await res.json();
         if (data.authenticated && data.user) {
           setUser(data.user);
+          setIsAdmin(!!data.isAdmin);
+        } else {
+          setUser(null);
+          setIsAdmin(false);
         }
       } catch (err) {
         console.error("Auth status error:", err);
@@ -196,10 +201,12 @@ export default function Home() {
         </div>
 
         <div className="header-actions">
-          {/* Admin link */}
-          <a href="/admin" className="btn btn-secondary btn-sm">
-            <ShieldCheck size={16} /> Admin Portal
-          </a>
+          {/* Admin link - only visible when an authorized admin is logged in */}
+          {isAdmin && (
+            <a href="/admin" className="btn btn-secondary btn-sm">
+              <ShieldCheck size={16} /> Admin Portal
+            </a>
+          )}
 
           {/* Theme Mode Toggle (System / Light / Dark) */}
           <ThemeToggle />
@@ -217,6 +224,7 @@ export default function Home() {
                 onClick={async () => {
                   await fetch("/api/auth/google/logout", { method: "POST" });
                   setUser(null);
+                  setIsAdmin(false);
                 }}
                 title="Sign out"
               >
@@ -224,8 +232,8 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            <a href="/api/auth/google/login" className="btn btn-primary btn-sm">
-              <LogIn size={15} /> Sign in with Google
+            <a href="/api/auth/google/login" className="btn-google">
+              <GoogleLogo size={16} /> Sign in with Google
             </a>
           )}
         </div>
@@ -445,11 +453,17 @@ export default function Home() {
 
           {/* Create Button */}
           <button
-            className="btn btn-primary btn-create-doc"
+            className={`btn ${user ? "btn-primary" : "btn-google-cta"} btn-create-doc`}
             onClick={handleCreateDoc}
             disabled={isGenerating || !policyCheck.allowed}
           >
-            <Sparkles size={18} />
+            {isGenerating ? (
+              <RefreshCw size={18} className="spin" />
+            ) : user ? (
+              <FileText size={18} />
+            ) : (
+              <GoogleLogo size={18} />
+            )}
             {isGenerating
               ? "Generating Google Doc..."
               : !policyCheck.allowed
@@ -528,7 +542,11 @@ export default function Home() {
             <div className="generation-status">
               {statusMessage && (
                 <div className="status-indicator">
-                  <Sparkles size={16} color="var(--primary)" />
+                  <RefreshCw
+                    size={16}
+                    className={isGenerating ? "spin" : ""}
+                    color="var(--primary)"
+                  />
                   <span>{statusMessage}</span>
                 </div>
               )}

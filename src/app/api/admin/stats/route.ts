@@ -1,10 +1,36 @@
 import { NextResponse, connection } from "next/server";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { executions, missingElements } from "@/lib/db/schema";
 import { desc, sql } from "drizzle-orm";
 
 export async function GET() {
   await connection();
+
+  // Verify administrator credentials
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("bsf_session");
+  if (!sessionCookie) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const session = JSON.parse(sessionCookie.value);
+    const adminEmails = (process.env.ADMIN_EMAILS || "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    const isAdmin =
+      session.user?.email &&
+      adminEmails.includes(session.user.email.toLowerCase());
+
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   // If DB is connected, run real SQL aggregations
   if (db) {

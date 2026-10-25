@@ -14,8 +14,10 @@ import {
   Calendar,
   Layers,
   ExternalLink,
+  ShieldAlert,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { GoogleLogo } from "@/components/GoogleLogo";
 
 interface AdminStats {
   totalExecutions: number;
@@ -58,13 +60,17 @@ export default function AdminPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [canaryRunning, setCanaryRunning] = useState(false);
   const [canaryResult, setCanaryResult] = useState<CanaryResult | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const fetchStats = useCallback(async () => {
     setIsRefreshing(true);
     try {
       const res = await fetch("/api/admin/stats");
-      const data = (await res.json()) as AdminStats;
-      setStats(data);
+      if (res.ok) {
+        const data = (await res.json()) as AdminStats;
+        setStats(data);
+      }
     } catch (err) {
       console.error("Failed to load admin stats:", err);
     } finally {
@@ -74,18 +80,34 @@ export default function AdminPage() {
 
   useEffect(() => {
     let ignore = false;
-    async function loadInitial() {
+    async function checkAuthAndLoad() {
       try {
-        const res = await fetch("/api/admin/stats");
-        const data = (await res.json()) as AdminStats;
-        if (!ignore) {
-          setStats(data);
+        const authRes = await fetch("/api/auth/google/status");
+        const authData = await authRes.json();
+        if (ignore) return;
+
+        if (authData.authenticated && authData.isAdmin) {
+          setIsAdmin(true);
+          setAuthChecked(true);
+          // Fetch stats only when authorized
+          const statsRes = await fetch("/api/admin/stats");
+          if (statsRes.ok) {
+            const data = (await statsRes.json()) as AdminStats;
+            if (!ignore) setStats(data);
+          }
+        } else {
+          setIsAdmin(false);
+          setAuthChecked(true);
         }
       } catch (err) {
-        console.error("Failed to load initial admin stats:", err);
+        console.error("Auth verification failed:", err);
+        if (!ignore) {
+          setIsAdmin(false);
+          setAuthChecked(true);
+        }
       }
     }
-    loadInitial();
+    checkAuthAndLoad();
     return () => {
       ignore = true;
     };
@@ -121,6 +143,66 @@ export default function AdminPage() {
   const maxBookCount = stats?.topBooks?.length
     ? Math.max(...stats.topBooks.map((b) => Number(b.count)))
     : 1;
+
+  if (!authChecked) {
+    return (
+      <div className="container" style={{ textAlign: "center", padding: "6rem 0" }}>
+        <RefreshCw size={28} className="spin" color="var(--primary)" />
+        <p style={{ marginTop: "1rem", color: "var(--text-muted)", fontSize: "0.9rem" }}>
+          Verifying administrator permissions...
+        </p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="container" style={{ maxWidth: "560px", marginTop: "5rem" }}>
+        <div
+          className="glass-panel"
+          style={{
+            padding: "3rem 2rem",
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "1.25rem",
+          }}
+        >
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: "rgba(244, 63, 94, 0.12)",
+              color: "var(--accent-rose)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ShieldAlert size={30} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: "1.4rem", fontWeight: 800, marginBottom: "0.5rem" }}>
+              Administrator Access Required
+            </h1>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", lineHeight: 1.6 }}>
+              The Admin Portal is restricted to authorized accounts. Please sign in with an approved administrator Google account to continue.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
+            <a href="/api/auth/google/login" className="btn-google">
+              <GoogleLogo size={16} /> Sign in with Google
+            </a>
+            <Link href="/" className="btn btn-secondary btn-sm">
+              <ArrowLeft size={14} /> Back to Formatter
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
