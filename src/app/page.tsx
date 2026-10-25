@@ -7,6 +7,8 @@ import {
   FormatOptions,
   getBookChapters,
   getDocTitle,
+  validateEsvPassageRange,
+  ESV_COPYRIGHT_NOTICE,
 } from "@/lib/bible/books";
 import {
   BookOpen,
@@ -58,6 +60,15 @@ export default function Home() {
 
   // Available chapters for selected book
   const chapters = useMemo(() => getBookChapters(bookId), [bookId]);
+
+  // Validate Crossway ESV guidelines (max 500 verses / half a book)
+  const policyCheck = useMemo(
+    () =>
+      versionId === "ESV"
+        ? validateEsvPassageRange(bookId, chapterStart, chapterEnd)
+        : { allowed: true },
+    [versionId, bookId, chapterStart, chapterEnd]
+  );
 
   // Adjust chapter selectors when book changes
   useEffect(() => {
@@ -322,6 +333,27 @@ export default function Home() {
                 ))}
               </select>
             </div>
+
+            {/* Crossway ESV Policy Range Notice */}
+            {!policyCheck.allowed && (
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "var(--radius-sm)",
+                  background: "rgba(245, 158, 11, 0.12)",
+                  border: "1px solid rgba(245, 158, 11, 0.35)",
+                  color: "var(--accent-amber)",
+                  fontSize: "0.825rem",
+                  display: "flex",
+                  gap: "0.5rem",
+                  alignItems: "flex-start",
+                }}
+              >
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+                <span>{policyCheck.reason}</span>
+              </div>
+            )}
           </div>
 
           {/* Section: Formatting Switches */}
@@ -438,11 +470,13 @@ export default function Home() {
             className="btn btn-primary"
             style={{ width: "100%", padding: "1rem", fontSize: "1.05rem" }}
             onClick={handleCreateDoc}
-            disabled={isGenerating}
+            disabled={isGenerating || !policyCheck.allowed}
           >
             <Sparkles size={18} />
             {isGenerating
               ? "Generating Google Doc..."
+              : !policyCheck.allowed
+              ? "Exceeds ESV Guidelines (Adjust Range)"
               : user
               ? "Create Formatted Google Doc"
               : "Sign in with Google & Create Doc"}
@@ -566,6 +600,35 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {/* Official Copyright & Legal Attribution Footer */}
+      {/* Required by Crossway ESV API Guidelines: https://api.esv.org/#copyright */}
+      <footer
+        style={{
+          marginTop: "3rem",
+          paddingTop: "1.5rem",
+          borderTop: "1px solid var(--border-glass)",
+          textAlign: "center",
+          fontSize: "0.8rem",
+          color: "var(--text-subtle)",
+          lineHeight: 1.6,
+        }}
+      >
+        <p>
+          {ESV_COPYRIGHT_NOTICE}{" "}
+          <a
+            href="https://www.esv.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--primary)", textDecoration: "underline" }}
+          >
+            www.esv.org
+          </a>
+        </p>
+        <p style={{ marginTop: "0.4rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+          Developed by Gideon Software Solutions. Made available free of charge for personal and church ministry use.
+        </p>
+      </footer>
     </div>
   );
 }

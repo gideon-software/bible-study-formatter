@@ -174,3 +174,68 @@ export function getDocTitle(
 
   return `${bookName} ${chapterStart}-${chapterEnd} (${versionAbbr})`;
 }
+
+/**
+ * ============================================================================
+ * Crossway ESV API Usage Policy & Copyright Compliance
+ * ----------------------------------------------------------------------------
+ * Reference: https://api.esv.org/#conditions and https://api.esv.org/#copyright
+ *
+ * Rules:
+ * 1. Request Limit: Maximum 500 verses or half a book (whichever is less).
+ *    Single- and double-chapter books (e.g. Obadiah, Jude, Haggai) are exempt.
+ * 2. Caching: May not locally store more than 500 verses.
+ * 3. Attribution: Official copyright notice must be displayed with a link
+ *    to www.esv.org, and doc exports must identify the ESV.
+ *
+ * NOTE FOR FUTURE PERMISSIONS:
+ * If Crossway grants Gideon Software permission/waiver to export full books
+ * or uncap caching, simply change `enforceLimits` to `false` below.
+ * ============================================================================
+ */
+export const ESV_POLICY_LIMITS = {
+  enforceLimits: true, // Set to false if Crossway approves full-book exemption
+  maxVerses: 500,
+  maxHalfBook: true,
+};
+
+export const ESV_COPYRIGHT_NOTICE =
+  "Scripture quotations are from the ESV® Bible (The Holy Bible, English Standard Version®), © 2001 by Crossway, a publishing ministry of Good News Publishers. Used by permission. All rights reserved.";
+
+export const ESV_SHORT_CREDIT =
+  "Scripture quotations from the ESV® Bible, © 2001 Crossway. Used by permission.";
+
+/**
+ * Validates whether the requested chapter range complies with Crossway's
+ * free API distribution guidelines (max 500 verses / half a book).
+ */
+export function validateEsvPassageRange(
+  bookId: string,
+  chapterStart: number,
+  chapterEnd: number
+): { allowed: boolean; reason?: string } {
+  if (!ESV_POLICY_LIMITS.enforceLimits) {
+    return { allowed: true };
+  }
+
+  const book = getBookById(bookId);
+  if (!book) return { allowed: false, reason: "Invalid book ID" };
+
+  // 1- and 2-chapter books are explicitly exempt from the half-book limit per Crossway terms
+  if (book.numChapters <= 2) {
+    return { allowed: true };
+  }
+
+  const numSelectedChapters = chapterEnd - chapterStart + 1;
+  const maxAllowedChapters = Math.ceil(book.numChapters / 2);
+
+  if (numSelectedChapters > maxAllowedChapters) {
+    return {
+      allowed: false,
+      reason: `Crossway ESV policy limits single-document exports to half a book (max ${maxAllowedChapters} chapters for ${book.name}). To format all of ${book.name}, export in two parts (e.g. chapters 1–${maxAllowedChapters} and ${maxAllowedChapters + 1}–${book.numChapters}).`,
+    };
+  }
+
+  return { allowed: true };
+}
+

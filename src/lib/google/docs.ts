@@ -1,5 +1,10 @@
 import { google, docs_v1 } from "googleapis";
-import { DocParagraph, FormatOptions, ParsedChapter } from "../bible/books";
+import {
+  DocParagraph,
+  FormatOptions,
+  ParsedChapter,
+  ESV_SHORT_CREDIT,
+} from "../bible/books";
 
 export interface GoogleDocResult {
   docId: string;
@@ -78,6 +83,22 @@ export function buildGoogleDocsRequests(
       alignment: "CENTER",
     });
 
+    // Crossway ESV copyright attribution on title page (per https://api.esv.org/#copyright)
+    if (versionAbbr === "ESV") {
+      const creditStart = fullText.length + 1;
+      fullText += `${ESV_SHORT_CREDIT}\n`;
+      styleRanges.push({
+        startIndex: creditStart,
+        endIndex: fullText.length,
+        type: "subtitle",
+      });
+      paragraphRanges.push({
+        startIndex: creditStart,
+        endIndex: fullText.length,
+        alignment: "CENTER",
+      });
+    }
+
     // Page break placeholder
     fullText += "\u000C"; // form feed / page break
   }
@@ -141,6 +162,23 @@ export function buildGoogleDocsRequests(
       });
     });
   });
+
+  // Crossway ESV copyright footnote at the end of the document if no title page
+  // (Complies with https://api.esv.org/#copyright requirement to identify ESV)
+  if (versionAbbr === "ESV" && !options.titlePage) {
+    fullText += `\n${ESV_SHORT_CREDIT}\n`;
+    const creditStart = fullText.length - ESV_SHORT_CREDIT.length - 1;
+    styleRanges.push({
+      startIndex: creditStart,
+      endIndex: fullText.length,
+      type: "subtitle",
+    });
+    paragraphRanges.push({
+      startIndex: creditStart,
+      endIndex: fullText.length,
+      alignment: "CENTER",
+    });
+  }
 
   // Request: Insert Full Text at index 1
   if (fullText.length > 0) {

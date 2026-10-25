@@ -5,12 +5,13 @@ import {
   getDocTitle,
   FormatOptions,
   ParsedChapter,
+  validateEsvPassageRange,
 } from "@/lib/bible/books";
 import { fetchEsvChapter } from "@/lib/bible/providers/esv";
 import { createGoogleDocWithAuth } from "@/lib/google/docs";
 import { db } from "@/lib/db";
 import { executions, bibleCache } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { sendAlert } from "@/lib/alerts/notify";
 
 export async function POST(request: Request) {
@@ -42,6 +43,21 @@ export async function POST(request: Request) {
         { error: `Invalid chapter range: ${chapterStart}-${chapterEnd}` },
         { status: 400 }
       );
+    }
+
+    // Validate Crossway ESV API guidelines (max 500 verses / half a book)
+    // See ESV_POLICY_LIMITS in src/lib/bible/books.ts to adjust if exemption is granted
+    if (version === "ESV") {
+      const policyCheck = validateEsvPassageRange(bookId, chapterStart, chapterEnd);
+      if (!policyCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: "Passage Range Exceeds Crossway ESV Policy",
+            message: policyCheck.reason,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // 1. Check user authentication
@@ -99,6 +115,8 @@ export async function POST(request: Request) {
         parsedCh = await fetchEsvChapter(bookId, ch, options);
 
         // Store into Neon DB cache
+        // Crossway policy: "You may not locally store more than 500 verses... You can cache up to 500 verses"
+        // We enforce a rolling cache of max 10 chapters for ESV to guarantee compliance.
         if (db && parsedCh) {
           try {
             await db
@@ -108,6 +126,22 @@ export async function POST(request: Request) {
                 contentJson: parsedCh,
               })
               .onConflictDoNothing();
+
+            // Rolling cache pruning for ESV
+            if (version === "ESV") {
+              const esvEntries = await db
+                .select({ id: bibleCache.id })
+                .from(bibleCache)
+                .where(sql`${bibleCache.passageKey} LIKE 'ESV/%'`)
+                .orderBy(desc(bibleCache.createdAt));
+
+              if (esvEntries.length > 10) {
+                const toPrune = esvEntries.slice(10);
+                for (const entry of toPrune) {
+                  await db.delete(bibleCache).where(eq(bibleCache.id, entry.id));
+                }
+              }
+            }
           } catch (cacheWriteErr) {
             console.warn("[Cache] Write error:", cacheWriteErr);
           }

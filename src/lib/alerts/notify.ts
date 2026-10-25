@@ -92,7 +92,9 @@ export async function sendAlert(payload: AlertPayload): Promise<void> {
 
   // 3. Dispatch to Email via Resend if configured
   const resendApiKey = process.env.RESEND_API_KEY;
-  const alertEmailTo = process.env.ALERT_EMAIL_TO;
+  const alertEmailTo =
+    process.env.ALERT_EMAIL_TO ||
+    process.env.ADMIN_EMAILS?.split(",")[0]?.trim();
   if (resendApiKey && alertEmailTo) {
     try {
       const resend = new Resend(resendApiKey);

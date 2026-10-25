@@ -5,6 +5,7 @@ import {
   getBookById,
   getBookChapters,
   getDocTitle,
+  validateEsvPassageRange,
 } from "./books";
 
 describe("Bible Books & Utilities", () => {
@@ -45,5 +46,23 @@ describe("Bible Books & Utilities", () => {
     assert.strictEqual(getDocTitle("JHN", 1, 1, "ESV"), "John 1 (ESV)");
     // Chapter range
     assert.strictEqual(getDocTitle("ROM", 1, 8, "ESV"), "Romans 1-8 (ESV)");
+  });
+
+  it("validates ESV passage ranges per Crossway policy", () => {
+    // Single and 2-chapter books are exempt
+    const obaCheck = validateEsvPassageRange("OBA", 1, 1);
+    assert.strictEqual(obaCheck.allowed, true);
+
+    const hagCheck = validateEsvPassageRange("HAG", 1, 2);
+    assert.strictEqual(hagCheck.allowed, true);
+
+    // Half of Romans (8 chapters out of 16) is allowed
+    const romHalfCheck = validateEsvPassageRange("ROM", 1, 8);
+    assert.strictEqual(romHalfCheck.allowed, true);
+
+    // Full Romans (16 chapters) exceeds the half-book limit
+    const romFullCheck = validateEsvPassageRange("ROM", 1, 16);
+    assert.strictEqual(romFullCheck.allowed, false);
+    assert(romFullCheck.reason?.includes("Crossway ESV policy limits"));
   });
 });
