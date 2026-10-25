@@ -285,15 +285,15 @@ export default function Home() {
                 value={bookId}
                 onChange={(e) => setBookId(e.target.value)}
               >
-                <optgroup label="New Testament">
-                  {BIBLE_BOOKS.filter((b) => b.testament === "NT").map((b) => (
+                <optgroup label="Old Testament">
+                  {BIBLE_BOOKS.filter((b) => b.testament === "OT").map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name} ({b.numChapters} chapters)
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="Old Testament">
-                  {BIBLE_BOOKS.filter((b) => b.testament === "OT").map((b) => (
+                <optgroup label="New Testament">
+                  {BIBLE_BOOKS.filter((b) => b.testament === "NT").map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name} ({b.numChapters} chapters)
                     </option>
