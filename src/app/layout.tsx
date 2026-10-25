@@ -8,7 +8,13 @@ export const metadata: Metadata = {
     "Generate beautifully formatted Google Docs of Scripture for Bible studies, sermon prep, and personal journals.",
   keywords: ["Bible", "Scripture", "Formatter", "Google Docs", "ESV", "Study"],
   icons: {
-    icon: "https://storage.googleapis.com/bible-study-formatter/images/png/bsf-32x32.png",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/bsf-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
 };
 

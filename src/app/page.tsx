@@ -193,7 +193,8 @@ export default function Home() {
       <header className="app-header">
         <div className="brand">
           <div className="brand-icon">
-            <BookOpen size={24} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icon.svg" alt="Bible Study Formatter Logo" width={30} height={30} />
           </div>
           <div>
             <h1>Bible Study Formatter</h1>

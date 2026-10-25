@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <filter id="bookShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#090d16" flood-opacity="0.35" />
+    </filter>
+    <filter id="pencilShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="6" dy="14" stdDeviation="14" flood-color="#000000" flood-opacity="0.28" />
+    </filter>
+    <linearGradient id="bookCoverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e2c44" />
+      <stop offset="100%" stop-color="#111c2e" />
+    </linearGradient>
+    <linearGradient id="pencilGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="40%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <linearGradient id="ferruleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e2e8f0" />
+      <stop offset="50%" stop-color="#cbd5e1" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Bible Book -->
+  <g filter="url(#bookShadow)">
+    <!-- Book Cover -->
+    <rect x="76" y="52" width="290" height="376" rx="42" fill="url(#bookCoverGrad)" stroke="#2b3e5e" stroke-width="3" />
+    
+    <!-- Spine Inset Line -->
+    <line x1="120" y1="68" x2="120" y2="390" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.85" />
+    
+    <!-- Bottom Pages Layer -->
+    <path d="M 124 416 C 145 388, 175 388, 205 388 L 350 388 C 360 388, 366 396, 366 406 C 366 418, 356 428, 344 428 L 138 428 C 126 428, 120 422, 124 416 Z" fill="#ffffff" />
+    
+    <!-- Bold White Christian Cross -->
+    <g fill="#ffffff">
+      <!-- Vertical beam -->
+      <rect x="221" y="126" width="38" height="176" rx="8" />
+      <!-- Horizontal beam -->
+      <rect x="175" y="174" width="130" height="38" rx="8" />
+    </g>
+  </g>
+
+  <!-- Angled Pencil (pointing down-left with eraser at top-right, matching Option A) -->
+  <g transform="translate(325, 305) rotate(135)" filter="url(#pencilShadow)">
+    <!-- Outer White Border Silhouette for clean high-contrast separation -->
+    <path d="M -38 -154 
+             A 22 22 0 0 1 38 -154 
+             L 38 76 
+             L 0 148 
+             L -38 76 
+             Z" fill="#ffffff" />
+
+    <!-- Coral-Red Eraser -->
+    <path d="M -28 -146 
+             A 16 16 0 0 1 28 -146 
+             L 28 -118 
+             L -28 -118 
+             Z" fill="#f43f5e" />
+
+    <!-- Silver Ferrule Metal Band -->
+    <rect x="-28" y="-118" width="56" height="30" fill="url(#ferruleGrad)" />
+    <line x1="-28" y1="-106" x2="28" y2="-106" stroke="#64748b" stroke-width="2.5" />
+    <line x1="-28" y1="-96" x2="28" y2="-96" stroke="#64748b" stroke-width="2.5" />
+
+    <!-- Yellow Pencil Body -->
+    <rect x="-28" y="-88" width="56" height="162" fill="url(#pencilGrad)" />
+    <!-- Bevel facet lines -->
+    <line x1="-9" y1="-88" x2="-9" y2="74" stroke="#d97706" stroke-width="3" opacity="0.6" />
+    <line x1="9" y1="-88" x2="9" y2="74" stroke="#d97706" stroke-width="3" opacity="0.6" />
+
+    <!-- Sharpened Natural Wood Collar -->
+    <polygon points="-28,74 28,74 0,132" fill="#fef08a" />
+
+    <!-- Dark Graphite Lead Tip -->
+    <polygon points="-11,110 11,110 0,132" fill="#1e293b" />
+  </g>
+</svg>
