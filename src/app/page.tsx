@@ -25,6 +25,16 @@ import {
   AlertCircle,
 } from "lucide-react";
 
+const FONT_FAMILY_MAP: Record<string, string> = {
+  Arial: "Arial, Helvetica, sans-serif",
+  Georgia: "Georgia, Cambria, serif",
+  "Times New Roman": "'Times New Roman', Times, serif",
+  Roboto: "'Roboto', sans-serif",
+  "Trebuchet MS": "'Trebuchet MS', 'Lucida Sans Unicode', sans-serif",
+  Verdana: "Verdana, Geneva, sans-serif",
+  "Courier New": "'Courier New', Courier, monospace",
+};
+
 export default function Home() {
   // Theme state
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -477,7 +487,7 @@ export default function Home() {
           <div
             className="doc-sheet"
             style={{
-              fontFamily: options.fontName,
+              fontFamily: FONT_FAMILY_MAP[options.fontName] || options.fontName,
               fontSize: `${options.fontSize}pt`,
               lineHeight: options.lineSpacing,
             }}
