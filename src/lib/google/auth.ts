@@ -13,7 +13,7 @@ export function getOAuth2Client(redirectUri?: string) {
   const callbackUrl =
     redirectUri ||
     process.env.GOOGLE_REDIRECT_URI ||
-    "http://localhost:3000/api/auth/google/callback";
+    "http://localhost:3000/api/auth/callback/google";
 
   return new google.auth.OAuth2(clientId, clientSecret, callbackUrl);
 }

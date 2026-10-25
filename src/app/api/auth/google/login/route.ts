@@ -17,7 +17,9 @@ export async function GET(request: Request) {
 
   const host = request.headers.get("host") || "localhost:3000";
   const protocol = request.headers.get("x-forwarded-proto") || "http";
-  const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+  const redirectUri =
+    process.env.GOOGLE_REDIRECT_URI ||
+    `${protocol}://${host}/api/auth/callback/google`;
 
   const authUrl = generateGoogleAuthUrl(redirectUri, returnTo);
   return NextResponse.redirect(authUrl);
