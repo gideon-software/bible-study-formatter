@@ -15,6 +15,7 @@ import {
   Layers,
   ExternalLink,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface AdminStats {
   totalExecutions: number;
@@ -136,6 +137,7 @@ export default function AdminPage() {
         </div>
 
         <div className="header-actions">
+          <ThemeToggle />
           <button className="btn btn-secondary btn-sm" onClick={fetchStats} disabled={isRefreshing} title="Refresh stats">
             <RefreshCw size={14} className={isRefreshing ? "spin" : ""} /> Refresh
           </button>

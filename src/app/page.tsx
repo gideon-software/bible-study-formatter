@@ -18,11 +18,10 @@ import {
   ExternalLink,
   LogIn,
   LogOut,
-  Moon,
-  Sun,
   ShieldCheck,
   AlertCircle,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const FONT_FAMILY_MAP: Record<string, string> = {
   Arial: "Arial, Helvetica, sans-serif",
@@ -35,8 +34,6 @@ const FONT_FAMILY_MAP: Record<string, string> = {
 };
 
 export default function Home() {
-  // Theme state
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   // Auth state
   const [user, setUser] = useState<{ name?: string; email?: string; picture?: string } | null>(null);
@@ -77,10 +74,6 @@ export default function Home() {
     [versionId, bookId, chapterStart, chapterEnd]
   );
 
-  // Toggle theme
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
 
   // Check auth session
   useEffect(() => {
@@ -208,14 +201,8 @@ export default function Home() {
             <ShieldCheck size={16} /> Admin Portal
           </a>
 
-          {/* Dark / Light Toggle */}
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            title="Toggle theme"
-          >
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
+          {/* Theme Mode Toggle (System / Light / Dark) */}
+          <ThemeToggle />
 
           {/* User Auth Pill */}
           {user ? (

@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap');
 
-:root {
+:root,
+[data-theme="dark"] {
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-serif: 'Lora', Georgia, serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -124,12 +125,14 @@ body {
   letter-spacing: -0.02em;
   background: linear-gradient(135deg, #ffffff 30%, var(--text-muted) 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 [data-theme="light"] .brand h1 {
   background: linear-gradient(135deg, #0f172a 30%, #475569 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -142,6 +145,42 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+/* Theme Segmented Control */
+.theme-segmented-control {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-full);
+  padding: 3px;
+  gap: 2px;
+}
+
+.theme-segment-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-segment-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-card-hover);
+}
+
+.theme-segment-btn.active {
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 2px 8px var(--primary-glow);
 }
 
 /* Auth Pill / User Badge */
@@ -601,6 +640,7 @@ body {
   letter-spacing: -0.03em;
   background: var(--primary-gradient);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 

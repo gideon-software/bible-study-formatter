@@ -30,6 +30,23 @@ export default function RootLayout({
         <meta name="darkreader-lock" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var stored = localStorage.getItem('bsf_theme');
+                  var theme = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+                  var resolved = theme;
+                  if (theme === 'system') {
+                    resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                  }
+                  document.documentElement.setAttribute('data-theme', resolved);
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
       </head>
       <body suppressHydrationWarning>{children}</body>
     </html>
