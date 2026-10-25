@@ -263,19 +263,12 @@ export default function Home() {
 
             {/* Book */}
             <div className="field-group full-width">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="field-header-row">
                 <label className="field-label">Book</label>
                 <button
                   type="button"
                   onClick={handleSelectWholeBook}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "var(--primary)",
-                    fontSize: "0.775rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
+                  className="btn-link"
                 >
                   Select entire book
                 </button>
@@ -336,21 +329,8 @@ export default function Home() {
 
             {/* Crossway ESV Policy Range Notice */}
             {!policyCheck.allowed && (
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  padding: "0.75rem 1rem",
-                  borderRadius: "var(--radius-sm)",
-                  background: "rgba(245, 158, 11, 0.12)",
-                  border: "1px solid rgba(245, 158, 11, 0.35)",
-                  color: "var(--accent-amber)",
-                  fontSize: "0.825rem",
-                  display: "flex",
-                  gap: "0.5rem",
-                  alignItems: "flex-start",
-                }}
-              >
-                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+              <div className="policy-warning-banner">
+                <AlertCircle size={16} />
                 <span>{policyCheck.reason}</span>
               </div>
             )}
@@ -467,8 +447,7 @@ export default function Home() {
 
           {/* Create Button */}
           <button
-            className="btn btn-primary"
-            style={{ width: "100%", padding: "1rem", fontSize: "1.05rem" }}
+            className="btn btn-primary btn-create-doc"
             onClick={handleCreateDoc}
             disabled={isGenerating || !policyCheck.allowed}
           >
@@ -489,7 +468,7 @@ export default function Home() {
             <h2 className="section-title">
               <FileText size={18} color="var(--accent-emerald)" /> Live Document Preview
             </h2>
-            <p style={{ fontSize: "0.825rem", color: "var(--text-subtle)", marginTop: "0.2rem" }}>
+            <p className="preview-subtitle">
               Simulating formatting for <strong>{currentTitle}</strong>
             </p>
           </div>
@@ -540,7 +519,7 @@ export default function Home() {
               {options.verseNumbers && <span className="doc-verse-num">5</span>}
               The light shines in the darkness,
               <br />
-              <span style={{ paddingLeft: "2rem", display: "inline-block" }}>
+              <span className="poetry-line-2">
                 and the darkness has not overcome it.
               </span>
             </p>
@@ -550,7 +529,7 @@ export default function Home() {
           {(isGenerating || progress !== null || errorMsg || createdDoc) && (
             <div className="generation-status">
               {statusMessage && (
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.9rem" }}>
+                <div className="status-indicator">
                   <Sparkles size={16} color="var(--primary)" />
                   <span>{statusMessage}</span>
                 </div>
@@ -566,16 +545,7 @@ export default function Home() {
               )}
 
               {errorMsg && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    color: "var(--accent-rose)",
-                    fontSize: "0.85rem",
-                    marginTop: "0.5rem",
-                  }}
-                >
+                <div className="status-error">
                   <AlertCircle size={16} />
                   <span>{errorMsg}</span>
                 </div>
@@ -584,10 +554,10 @@ export default function Home() {
               {createdDoc && (
                 <div className="doc-link-card">
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "var(--text-main)" }}>
+                    <div className="doc-link-name">
                       {createdDoc.name}
                     </div>
-                    <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    <div className="doc-link-desc">
                       Saved directly in your Google Drive
                     </div>
                   </div>
@@ -603,29 +573,18 @@ export default function Home() {
 
       {/* Official Copyright & Legal Attribution Footer */}
       {/* Required by Crossway ESV API Guidelines: https://api.esv.org/#copyright */}
-      <footer
-        style={{
-          marginTop: "3rem",
-          paddingTop: "1.5rem",
-          borderTop: "1px solid var(--border-glass)",
-          textAlign: "center",
-          fontSize: "0.8rem",
-          color: "var(--text-subtle)",
-          lineHeight: 1.6,
-        }}
-      >
+      <footer className="app-footer">
         <p>
           {ESV_COPYRIGHT_NOTICE}{" "}
           <a
             href="https://www.esv.org"
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: "var(--primary)", textDecoration: "underline" }}
           >
             www.esv.org
           </a>
         </p>
-        <p style={{ marginTop: "0.4rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+        <p className="app-footer-credit">
           Developed by Gideon Software Solutions. Made available free of charge for personal and church ministry use.
         </p>
       </footer>

@@ -466,6 +466,105 @@ body {
   text-decoration: underline;
 }
 
+/* UI Helper Classes */
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 0.775rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.policy-warning-banner {
+  grid-column: 1 / -1;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: var(--accent-amber);
+  font-size: 0.825rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.policy-warning-banner svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.field-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-create-doc {
+  width: 100%;
+  padding: 1rem;
+  font-size: 1.05rem;
+}
+
+.preview-subtitle {
+  font-size: 0.825rem;
+  color: var(--text-subtle);
+  margin-top: 0.2rem;
+}
+
+.poetry-line-2 {
+  padding-left: 2rem;
+  display: inline-block;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.status-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--accent-rose);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.doc-link-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.doc-link-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.app-footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-glass);
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+  line-height: 1.6;
+}
+
+.app-footer a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.app-footer-credit {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* Admin Dashboard Specific */
 .admin-metrics-grid {
   display: grid;
