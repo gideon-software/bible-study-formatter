@@ -9,6 +9,7 @@ import {
   getDocTitle,
   validateEsvPassageRange,
   ESV_COPYRIGHT_NOTICE,
+  getVersionCredit,
 } from "@/lib/bible/books";
 import {
   BookOpen,
@@ -511,7 +512,7 @@ export default function Home() {
             {options.titlePage && (
               <div className="doc-title-page-preview">
                 <h2>{currentTitle}</h2>
-                <p>{versionId} • English Standard Version</p>
+                <p>{versionId} • {SUPPORTED_VERSIONS.find((v) => v.id === versionId)?.name || versionId}</p>
               </div>
             )}
 
@@ -604,14 +605,20 @@ export default function Home() {
       {/* Required by Crossway ESV API Guidelines: https://api.esv.org/#copyright */}
       <footer className="app-footer">
         <p>
-          {ESV_COPYRIGHT_NOTICE}{" "}
-          <a
-            href="https://www.esv.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            www.esv.org
-          </a>
+          {versionId === "ESV" ? (
+            <>
+              {ESV_COPYRIGHT_NOTICE}{" "}
+              <a
+                href="https://www.esv.org"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                www.esv.org
+              </a>
+            </>
+          ) : (
+            getVersionCredit(versionId)
+          )}
         </p>
         <p className="app-footer-credit">
           Developed by Gideon Software Solutions. Made available free of charge for personal and church ministry use.

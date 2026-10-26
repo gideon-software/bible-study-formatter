@@ -5,9 +5,11 @@ import {
   getDocTitle,
   FormatOptions,
   ParsedChapter,
+  SUPPORTED_VERSIONS,
   validateEsvPassageRange,
 } from "@/lib/bible/books";
 import { fetchEsvChapter } from "@/lib/bible/providers/esv";
+import { fetchApiBibleChapter } from "@/lib/bible/providers/apibible";
 import { createGoogleDocWithAuth } from "@/lib/google/docs";
 import { db } from "@/lib/db";
 import { executions, bibleCache } from "@/lib/db/schema";
@@ -110,9 +112,17 @@ export async function POST(request: Request) {
         }
       }
 
-      // If not cached, fetch from Crossway ESV API
+      // If not cached, fetch from provider
       if (!parsedCh) {
-        parsedCh = await fetchEsvChapter(bookId, ch, options);
+        const selectedVer = SUPPORTED_VERSIONS.find(
+          (v) => String(v.id).toUpperCase() === version.toUpperCase()
+        );
+
+        if (selectedVer?.provider === "apibible") {
+          parsedCh = await fetchApiBibleChapter(bookId, ch, version, options);
+        } else {
+          parsedCh = await fetchEsvChapter(bookId, ch, options);
+        }
 
         // Store into Neon DB cache
         // Crossway policy: "You may not locally store more than 500 verses... You can cache up to 500 verses"

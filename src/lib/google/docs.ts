@@ -2,7 +2,7 @@ import { google, docs_v1 } from "googleapis";
 import {
   FormatOptions,
   ParsedChapter,
-  ESV_SHORT_CREDIT,
+  getVersionCredit,
 } from "../bible/books";
 
 export interface GoogleDocResult {
@@ -82,10 +82,11 @@ export function buildGoogleDocsRequests(
       alignment: "CENTER",
     });
 
-    // Crossway ESV copyright attribution on title page (per https://api.esv.org/#copyright)
-    if (versionAbbr === "ESV") {
+    // Version copyright attribution on title page
+    const titleCredit = getVersionCredit(versionAbbr);
+    if (titleCredit) {
       const creditStart = fullText.length + 1;
-      fullText += `${ESV_SHORT_CREDIT}\n`;
+      fullText += `${titleCredit}\n`;
       styleRanges.push({
         startIndex: creditStart,
         endIndex: fullText.length,
@@ -162,21 +163,23 @@ export function buildGoogleDocsRequests(
     });
   });
 
-  // Crossway ESV copyright footnote at the end of the document if no title page
-  // (Complies with https://api.esv.org/#copyright requirement to identify ESV)
-  if (versionAbbr === "ESV" && !options.titlePage) {
-    fullText += `\n${ESV_SHORT_CREDIT}\n`;
-    const creditStart = fullText.length - ESV_SHORT_CREDIT.length - 1;
-    styleRanges.push({
-      startIndex: creditStart,
-      endIndex: fullText.length,
-      type: "subtitle",
-    });
-    paragraphRanges.push({
-      startIndex: creditStart,
-      endIndex: fullText.length,
-      alignment: "CENTER",
-    });
+  // Version copyright footnote at the end of the document if no title page
+  if (!options.titlePage) {
+    const footerCredit = getVersionCredit(versionAbbr);
+    if (footerCredit) {
+      fullText += `\n${footerCredit}\n`;
+      const creditStart = fullText.length - footerCredit.length - 1;
+      styleRanges.push({
+        startIndex: creditStart,
+        endIndex: fullText.length,
+        type: "subtitle",
+      });
+      paragraphRanges.push({
+        startIndex: creditStart,
+        endIndex: fullText.length,
+        alignment: "CENTER",
+      });
+    }
   }
 
   // Request: Insert Full Text at index 1

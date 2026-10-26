@@ -60,16 +60,23 @@ export const SUPPORTED_VERSIONS: BibleVersion[] = [
   {
     id: "CSB",
     abbr: "CSB",
-    name: "Christian Standard Bible (Coming Soon)",
-    provider: "youversion",
-    enabled: false,
+    name: "Christian Standard Bible",
+    provider: "apibible",
+    enabled: true,
   },
   {
     id: "NIV",
     abbr: "NIV",
-    name: "New International Version (Coming Soon)",
-    provider: "youversion",
-    enabled: false,
+    name: "New International Version",
+    provider: "apibible",
+    enabled: true,
+  },
+  {
+    id: "NASB",
+    abbr: "NASB",
+    name: "New American Standard Bible",
+    provider: "apibible",
+    enabled: true,
   },
 ];
 
@@ -206,6 +213,30 @@ export const ESV_COPYRIGHT_NOTICE =
 
 export const ESV_SHORT_CREDIT =
   "Scripture quotations from the ESV® Bible, © 2001 Crossway. Used by permission.";
+
+export const CSB_SHORT_CREDIT =
+  "Scripture quotations marked CSB are taken from the Christian Standard Bible®, Copyright © 2017 by Holman Bible Publishers. Used by permission.";
+
+export const NIV_SHORT_CREDIT =
+  "Scripture quotations taken from The Holy Bible, New International Version® NIV® Copyright © 1973, 1978, 1984, 2011 by Biblica, Inc.® Used by permission.";
+
+export const NASB_SHORT_CREDIT =
+  "Scripture taken from the NEW AMERICAN STANDARD BIBLE®, Copyright © 1960, 1971, 1977, 1995, 2020 by The Lockman Foundation. Used by permission.";
+
+export function getVersionCredit(versionAbbr: string): string {
+  switch (versionAbbr.toUpperCase()) {
+    case "ESV":
+      return ESV_SHORT_CREDIT;
+    case "CSB":
+      return CSB_SHORT_CREDIT;
+    case "NIV":
+      return NIV_SHORT_CREDIT;
+    case "NASB":
+      return NASB_SHORT_CREDIT;
+    default:
+      return `Scripture quotations from the ${versionAbbr} Bible.`;
+  }
+}
 
 /**
  * Calculates the exact number of verses in a chapter range
