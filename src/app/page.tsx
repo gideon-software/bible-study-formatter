@@ -102,9 +102,8 @@ export default function Home() {
   // Handle book selection change
   const handleBookChange = (newBookId: string) => {
     setBookId(newBookId);
-    const newChapters = getBookChapters(newBookId);
     setChapterStart(1);
-    setChapterEnd(newChapters.length || 1);
+    setChapterEnd(1);
   };
 
   // Handle whole book selection
@@ -283,16 +282,7 @@ export default function Home() {
 
             {/* Book */}
             <div className="field-group full-width">
-              <div className="field-header-row">
-                <label className="field-label">Book</label>
-                <button
-                  type="button"
-                  onClick={handleSelectWholeBook}
-                  className="btn-link"
-                >
-                  Select entire book
-                </button>
-              </div>
+              <label className="field-label">Book</label>
               <select
                 className="field-select"
                 value={bookId}
@@ -333,7 +323,18 @@ export default function Home() {
 
             {/* Chapter End */}
             <div className="field-group">
-              <label className="field-label">Last Chapter</label>
+              <div className="field-header-row">
+                <label className="field-label">Last Chapter</label>
+                {chapters.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleSelectWholeBook}
+                    className="btn-link"
+                  >
+                    Select entire book
+                  </button>
+                )}
+              </div>
               <select
                 className="field-select"
                 value={chapterEnd}
@@ -351,7 +352,29 @@ export default function Home() {
             {!policyCheck.allowed && (
               <div className="policy-warning-banner">
                 <AlertCircle size={16} />
-                <span>{policyCheck.reason}</span>
+                <span>
+                  {policyCheck.reasonPrefix ? (
+                    <>
+                      {policyCheck.reasonPrefix} To stay within guidelines,{" "}
+                      {policyCheck.suggestedEndChapter ? (
+                        <button
+                          type="button"
+                          className="policy-suggestion-link"
+                          onClick={() =>
+                            handleChapterEndChange(policyCheck.suggestedEndChapter!)
+                          }
+                        >
+                          select up to {policyCheck.suggestedRangeLabel}
+                        </button>
+                      ) : (
+                        `select up to ${policyCheck.suggestedRangeLabel}`
+                      )}{" "}
+                      {policyCheck.reasonSuffix}
+                    </>
+                  ) : (
+                    policyCheck.reason
+                  )}
+                </span>
               </div>
             )}
           </div>

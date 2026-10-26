@@ -273,11 +273,21 @@ export function getPassageVerseCount(
  * "Up to 500 verses or half a book, whichever is less (excepting single-chapter
  * and double-chapter books)." - https://api.esv.org/#conditions
  */
+export interface EsvPolicyCheckResult {
+  allowed: boolean;
+  reason?: string;
+  reasonPrefix?: string;
+  reasonSuffix?: string;
+  verseCount?: number;
+  suggestedEndChapter?: number;
+  suggestedRangeLabel?: string;
+}
+
 export function validateEsvPassageRange(
   bookId: string,
   chapterStart: number,
   chapterEnd: number
-): { allowed: boolean; reason?: string; verseCount?: number } {
+): EsvPolicyCheckResult {
   if (!ESV_POLICY_LIMITS.enforceLimits) {
     return { allowed: true };
   }
@@ -304,13 +314,14 @@ export function validateEsvPassageRange(
 
   // Condition 1: Check 500-verse cap
   if (totalVerses > 500) {
-    // Calculate how many chapters fit under 500 verses
+    // Calculate how many chapters fit under 500 verses and under 50% of book
     let runningVerses = 0;
     let suggestedEnd = chapterStart;
     const versesArr = BIBLE_CHAPTER_VERSES[bookId.toUpperCase()] || [];
     for (let ch = chapterStart; ch <= book.numChapters; ch++) {
       const chVerses = versesArr[ch - 1] || 0;
       if (runningVerses + chVerses > 500) break;
+      if (ch - chapterStart + 1 > maxAllowedChapters) break;
       runningVerses += chVerses;
       suggestedEnd = ch;
     }
@@ -320,19 +331,41 @@ export function validateEsvPassageRange(
         ? `chapter ${chapterStart}`
         : `chapters ${chapterStart}–${suggestedEnd}`;
 
+    const reasonPrefix = `Crossway ESV policy limits single exports to 500 verses or half a book, whichever is less. ${book.name} ${chapterStart}–${chapterEnd} contains ${totalVerses} verses (exceeding the 500-verse cap).`;
+    const reasonSuffix = `(${runningVerses} verses), or export in smaller sections.`;
+    const fullReason = `${reasonPrefix} To stay within guidelines, select up to ${rangeStr} ${reasonSuffix}`;
+
     return {
       allowed: false,
       verseCount: totalVerses,
-      reason: `Crossway ESV policy limits single exports to 500 verses or half a book, whichever is less. ${book.name} ${chapterStart}–${chapterEnd} contains ${totalVerses} verses (exceeding the 500-verse cap). To stay within guidelines, select up to ${rangeStr} (${runningVerses} verses), or export in smaller sections.`,
+      reason: fullReason,
+      reasonPrefix,
+      reasonSuffix,
+      suggestedEndChapter: suggestedEnd,
+      suggestedRangeLabel: rangeStr,
     };
   }
 
   // Condition 2: Check half-book cap
   if (numSelectedChapters > maxAllowedChapters) {
+    const suggestedEnd = Math.min(book.numChapters, chapterStart + maxAllowedChapters - 1);
+    const rangeStr =
+      suggestedEnd === chapterStart
+        ? `chapter ${chapterStart}`
+        : `chapters ${chapterStart}–${suggestedEnd}`;
+
+    const reasonPrefix = `Crossway ESV policy limits single exports to 500 verses or half a book, whichever is less. You selected ${numSelectedChapters} of ${book.numChapters} chapters (exceeding 50% of ${book.name}).`;
+    const reasonSuffix = `(50% of ${book.name}), or export in parts.`;
+    const fullReason = `${reasonPrefix} To stay within guidelines, select up to ${rangeStr} ${reasonSuffix}`;
+
     return {
       allowed: false,
       verseCount: totalVerses,
-      reason: `Crossway ESV policy limits single exports to 500 verses or half a book, whichever is less. You selected ${numSelectedChapters} of ${book.numChapters} chapters (exceeding 50% of ${book.name}). To format ${book.name}, export in parts (e.g. chapters 1–${maxAllowedChapters} and ${maxAllowedChapters + 1}–${book.numChapters}).`,
+      reason: fullReason,
+      reasonPrefix,
+      reasonSuffix,
+      suggestedEndChapter: suggestedEnd,
+      suggestedRangeLabel: rangeStr,
     };
   }
 
