@@ -38,6 +38,7 @@ export default function Home() {
   // Auth state
   const [user, setUser] = useState<{ name?: string; email?: string; picture?: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   // Form selections
   const [versionId, setVersionId] = useState("ESV");
@@ -84,6 +85,7 @@ export default function Home() {
         const data = await res.json();
         if (data.authenticated && data.user) {
           setUser(data.user);
+          setAvatarError(false);
           setIsAdmin(!!data.isAdmin);
         } else {
           setUser(null);
@@ -214,10 +216,21 @@ export default function Home() {
           {/* User Auth Pill */}
           {user ? (
             <div className="user-pill">
-              {user.picture ? (
+              {user.picture && !avatarError ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={user.picture} alt="Avatar" className="user-avatar" />
-              ) : null}
+                <img
+                  src={user.picture}
+                  alt={user.name || "Avatar"}
+                  className="user-avatar"
+                  referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
+                  onError={() => setAvatarError(true)}
+                />
+              ) : (
+                <div className="user-avatar-fallback" aria-hidden="true">
+                  {(user.name || user.email || "G").charAt(0).toUpperCase()}
+                </div>
+              )}
               <span>{user.name || user.email}</span>
               <button
                 className="btn btn-secondary btn-sm"
