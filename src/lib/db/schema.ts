@@ -52,7 +52,22 @@ export const bibleCache = pgTable("bible_cache", {
     .notNull(),
 });
 
+export const userPreferences = pgTable("user_preferences", {
+  id: serial("id").primaryKey(),
+  userEmail: varchar("user_email", { length: 255 }).unique().notNull(),
+  defaultVersion: varchar("default_version", { length: 20 }).default("ESV"),
+  defaultOptionsJson: json("default_options_json").notNull(),
+  lastBookId: varchar("last_book_id", { length: 10 }),
+  lastChapterStart: integer("last_chapter_start"),
+  lastChapterEnd: integer("last_chapter_end"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export type Execution = typeof executions.$inferSelect;
 export type NewExecution = typeof executions.$inferInsert;
 export type MissingElement = typeof missingElements.$inferSelect;
 export type NewMissingElement = typeof missingElements.$inferInsert;
+export type UserPreference = typeof userPreferences.$inferSelect;
+export type NewUserPreference = typeof userPreferences.$inferInsert;

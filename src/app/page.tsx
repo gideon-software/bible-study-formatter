@@ -20,9 +20,13 @@ import {
   ShieldCheck,
   AlertCircle,
   RefreshCw,
+  BookmarkCheck,
+  RotateCcw,
+  Check,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GoogleLogo } from "@/components/GoogleLogo";
+import { parseUrlSettings } from "@/lib/bible/urlParams";
 
 const FONT_FAMILY_MAP: Record<string, string> = {
   Arial: "Arial, Helvetica, sans-serif",
@@ -34,29 +38,44 @@ const FONT_FAMILY_MAP: Record<string, string> = {
   "Courier New": "'Courier New', Courier, monospace",
 };
 
-export default function Home() {
+const SYSTEM_DEFAULT_OPTIONS: FormatOptions = {
+  chapterHeaders: true,
+  chapterPageBreaks: true,
+  verseNumbers: true,
+  titlePage: false,
+  fontName: "Arial",
+  fontSize: 11,
+  lineSpacing: 2,
+};
 
+const SYSTEM_DEFAULT_VERSION = "ESV";
+
+export default function Home() {
   // Auth state
   const [user, setUser] = useState<{ name?: string; email?: string; picture?: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
   // Form selections
-  const [versionId, setVersionId] = useState("ESV");
+  const [versionId, setVersionId] = useState(SYSTEM_DEFAULT_VERSION);
   const [bookId, setBookId] = useState("JHN");
   const [chapterStart, setChapterStart] = useState(1);
   const [chapterEnd, setChapterEnd] = useState(1);
 
   // Formatting Options
-  const [options, setOptions] = useState<FormatOptions>({
-    chapterHeaders: true,
-    chapterPageBreaks: true,
-    verseNumbers: true,
-    titlePage: false,
-    fontName: "Arial",
-    fontSize: 11,
-    lineSpacing: 2,
+  const [options, setOptions] = useState<FormatOptions>(SYSTEM_DEFAULT_OPTIONS);
+
+  // User Defaults state (persisted across sessions)
+  const [savedDefaults, setSavedDefaults] = useState<{
+    version: string;
+    options: FormatOptions;
+  }>({
+    version: SYSTEM_DEFAULT_VERSION,
+    options: SYSTEM_DEFAULT_OPTIONS,
   });
+  const [defaultsSavedNotice, setDefaultsSavedNotice] = useState(false);
+  const [versionSavedNotice, setVersionSavedNotice] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Generation status
   const [isGenerating, setIsGenerating] = useState(false);
@@ -68,6 +87,24 @@ export default function Home() {
   // Available chapters for selected book
   const chapters = useMemo(() => getBookChapters(bookId), [bookId]);
 
+  // Check if formatting options differ from saved defaults
+  const isFormattingDirty = useMemo(() => {
+    return (
+      options.chapterHeaders !== savedDefaults.options.chapterHeaders ||
+      options.chapterPageBreaks !== savedDefaults.options.chapterPageBreaks ||
+      options.verseNumbers !== savedDefaults.options.verseNumbers ||
+      options.titlePage !== savedDefaults.options.titlePage ||
+      options.fontName !== savedDefaults.options.fontName ||
+      options.fontSize !== savedDefaults.options.fontSize ||
+      options.lineSpacing !== savedDefaults.options.lineSpacing
+    );
+  }, [options, savedDefaults.options]);
+
+  // Check if active Bible version differs from saved default version
+  const isVersionDirty = useMemo(() => {
+    return versionId !== savedDefaults.version;
+  }, [versionId, savedDefaults.version]);
+
   // Validate Crossway ESV guidelines (max 500 verses / half a book)
   const policyCheck = useMemo(
     () =>
@@ -77,27 +114,288 @@ export default function Home() {
     [versionId, bookId, chapterStart, chapterEnd]
   );
 
-
-  // Check auth session
+  // Initial client hydration: URL Params > Local Session > User Saved Defaults > System Defaults
   useEffect(() => {
-    async function checkAuth() {
+    let isMounted = true;
+
+    async function initSession() {
+      // 1. Parse URL query params
+      const urlSettings = parseUrlSettings(window.location.search);
+
+      // 2. Read saved defaults from localStorage
+      let localDefaults: { version: string; options: FormatOptions } = {
+        version: SYSTEM_DEFAULT_VERSION,
+        options: { ...SYSTEM_DEFAULT_OPTIONS },
+      };
       try {
-        const res = await fetch("/api/auth/google/status");
-        const data = await res.json();
-        if (data.authenticated && data.user) {
-          setUser(data.user);
+        const rawSaved = localStorage.getItem("bsf_user_defaults");
+        if (rawSaved) {
+          const parsed = JSON.parse(rawSaved);
+          if (parsed?.options) {
+            localDefaults = {
+              version: parsed.version || SYSTEM_DEFAULT_VERSION,
+              options: { ...SYSTEM_DEFAULT_OPTIONS, ...parsed.options },
+            };
+          }
+        }
+      } catch (e) {
+        console.error("Failed to read bsf_user_defaults:", e);
+      }
+
+      // 3. Read current session preferences from localStorage
+      let localCurrentOptions: FormatOptions | null = null;
+      try {
+        const rawCur = localStorage.getItem("bsf_current_options");
+        if (rawCur) {
+          localCurrentOptions = { ...SYSTEM_DEFAULT_OPTIONS, ...JSON.parse(rawCur) };
+        }
+      } catch (e) {
+        console.error("Failed to read bsf_current_options:", e);
+      }
+
+      let localPassage: { bookId: string; chapterStart: number; chapterEnd: number } | null = null;
+      try {
+        const rawPassage = localStorage.getItem("bsf_last_passage");
+        if (rawPassage) {
+          localPassage = JSON.parse(rawPassage);
+        }
+      } catch (e) {
+        console.error("Failed to read bsf_last_passage:", e);
+      }
+
+      let localCurrentVersion: string | null = null;
+      try {
+        localCurrentVersion = localStorage.getItem("bsf_current_version");
+      } catch (e) {
+        console.error("Failed to read bsf_current_version:", e);
+      }
+
+      // 4. Resolve initial values
+      const initialVersion =
+        urlSettings.versionId ||
+        localCurrentVersion ||
+        localDefaults.version ||
+        SYSTEM_DEFAULT_VERSION;
+
+      const initialBookId =
+        urlSettings.bookId ||
+        localPassage?.bookId ||
+        "JHN";
+
+      const initialStart =
+        urlSettings.chapterStart ??
+        localPassage?.chapterStart ??
+        1;
+
+      const initialEnd =
+        urlSettings.chapterEnd ??
+        localPassage?.chapterEnd ??
+        1;
+
+      // Formatting options: URL params override active session & defaults for this load without wiping defaults
+      const baseOptions = localCurrentOptions || localDefaults.options;
+      const initialOptions: FormatOptions = {
+        ...baseOptions,
+        ...(urlSettings.options || {}),
+      };
+
+      if (!isMounted) return;
+
+      setSavedDefaults(localDefaults);
+      setVersionId(initialVersion);
+      setBookId(initialBookId);
+      setChapterStart(initialStart);
+      setChapterEnd(initialEnd);
+      setOptions(initialOptions);
+      setIsHydrated(true);
+
+      // 5. Check Auth & Load DB Preferences if logged in
+      try {
+        const authRes = await fetch("/api/auth/google/status");
+        const authData = await authRes.json();
+        if (!isMounted) return;
+
+        if (authData.authenticated && authData.user) {
+          setUser(authData.user);
           setAvatarError(false);
-          setIsAdmin(!!data.isAdmin);
+          setIsAdmin(!!authData.isAdmin);
+
+          // Fetch DB preferences for authenticated user
+          const prefRes = await fetch("/api/user/preferences");
+          const prefData = await prefRes.json();
+          if (!isMounted) return;
+
+          if (prefData.preferences) {
+            const dbPref = prefData.preferences;
+            const mergedDefaults = {
+              version: dbPref.defaultVersion || SYSTEM_DEFAULT_VERSION,
+              options: {
+                ...SYSTEM_DEFAULT_OPTIONS,
+                ...(dbPref.defaultOptionsJson || {}),
+              },
+            };
+            setSavedDefaults(mergedDefaults);
+            try {
+              localStorage.setItem("bsf_user_defaults", JSON.stringify(mergedDefaults));
+            } catch {}
+
+            // If no URL settings were present and no active session storage, restore passage from DB
+            if (!urlSettings.hasUrlSettings && !localPassage && dbPref.lastBookId) {
+              setBookId(dbPref.lastBookId);
+              if (dbPref.lastChapterStart) setChapterStart(dbPref.lastChapterStart);
+              if (dbPref.lastChapterEnd) setChapterEnd(dbPref.lastChapterEnd);
+            }
+          }
         } else {
           setUser(null);
           setIsAdmin(false);
         }
       } catch (err) {
-        console.error("Auth status error:", err);
+        console.error("Init auth and preferences error:", err);
       }
     }
-    checkAuth();
+
+    initSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  // Sync active session formatting options to localStorage
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("bsf_current_options", JSON.stringify(options));
+    } catch (e) {
+      console.error("Failed to save current options to localStorage:", e);
+    }
+  }, [options, isHydrated]);
+
+  // Sync active Bible version to localStorage
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("bsf_current_version", versionId);
+    } catch (e) {
+      console.error("Failed to save current version to localStorage:", e);
+    }
+  }, [versionId, isHydrated]);
+
+  // Sync active Scripture passage to localStorage & database
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem(
+        "bsf_last_passage",
+        JSON.stringify({ bookId, chapterStart, chapterEnd })
+      );
+    } catch (e) {
+      console.error("Failed to save last passage to localStorage:", e);
+    }
+
+    // Debounced sync to database if logged in
+    if (user) {
+      const timer = setTimeout(() => {
+        fetch("/api/user/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lastBookId: bookId,
+            lastChapterStart: chapterStart,
+            lastChapterEnd: chapterEnd,
+          }),
+        }).catch((err) => console.error("Failed to update last passage in DB:", err));
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [bookId, chapterStart, chapterEnd, isHydrated, user]);
+
+  // Handle saving current formatting options as personal defaults
+  const handleSaveDefaults = async () => {
+    const newDefaults = {
+      ...savedDefaults,
+      options: { ...options },
+    };
+    setSavedDefaults(newDefaults);
+    try {
+      localStorage.setItem("bsf_user_defaults", JSON.stringify(newDefaults));
+    } catch (e) {
+      console.error("Failed to save defaults to localStorage:", e);
+    }
+
+    if (user) {
+      try {
+        await fetch("/api/user/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            defaultOptionsJson: options,
+          }),
+        });
+      } catch (e) {
+        console.error("Failed to sync defaults to database:", e);
+      }
+    }
+
+    setDefaultsSavedNotice(true);
+    setTimeout(() => {
+      setDefaultsSavedNotice(false);
+    }, 2500);
+  };
+
+  // Handle resetting active formatting options to saved personal defaults
+  const handleResetDefaults = () => {
+    setOptions({ ...savedDefaults.options });
+    try {
+      localStorage.setItem("bsf_current_options", JSON.stringify(savedDefaults.options));
+    } catch (e) {
+      console.error("Failed to update localStorage:", e);
+    }
+  };
+
+  // Handle saving current Bible version as default
+  const handleSaveDefaultVersion = async () => {
+    const newDefaults = {
+      ...savedDefaults,
+      version: versionId,
+    };
+    setSavedDefaults(newDefaults);
+    try {
+      localStorage.setItem("bsf_user_defaults", JSON.stringify(newDefaults));
+    } catch (e) {
+      console.error("Failed to save default version to localStorage:", e);
+    }
+
+    if (user) {
+      try {
+        await fetch("/api/user/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            defaultVersion: versionId,
+          }),
+        });
+      } catch (e) {
+        console.error("Failed to sync default version to database:", e);
+      }
+    }
+
+    setVersionSavedNotice(true);
+    setTimeout(() => {
+      setVersionSavedNotice(false);
+    }, 2500);
+  };
+
+  // Handle resetting active Bible version to saved default version
+  const handleResetDefaultVersion = () => {
+    setVersionId(savedDefaults.version);
+    try {
+      localStorage.setItem("bsf_current_version", savedDefaults.version);
+    } catch (e) {
+      console.error("Failed to update localStorage:", e);
+    }
+  };
 
   // Handle book selection change
   const handleBookChange = (newBookId: string) => {
@@ -257,10 +555,36 @@ export default function Home() {
         {/* Left Column: Form Controls */}
         <div className="glass-panel form-section">
           {/* Section: Bible Passage */}
-          <div>
+          <div className="section-header-container">
             <h2 className="section-title">
               <BookOpen size={18} color="var(--primary)" /> 1. Select Scripture
             </h2>
+            <div className="section-header-actions">
+              {versionSavedNotice ? (
+                <span className="save-feedback-badge">
+                  <Check size={13} /> Default version saved
+                </span>
+              ) : isVersionDirty ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-header-action btn-save-default"
+                    onClick={handleSaveDefaultVersion}
+                    title={`Save ${versionId} as your default Bible version`}
+                  >
+                    <BookmarkCheck size={14} /> Set as default version
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-header-action"
+                    onClick={handleResetDefaultVersion}
+                    title={`Reset version to default (${savedDefaults.version})`}
+                  >
+                    <RotateCcw size={13} /> Reset to default
+                  </button>
+                </>
+              ) : null}
+            </div>
           </div>
 
           <div className="field-grid">
@@ -380,10 +704,36 @@ export default function Home() {
           </div>
 
           {/* Section: Formatting Switches */}
-          <div>
+          <div className="section-header-container">
             <h2 className="section-title">
               <Settings2 size={18} color="var(--primary)" /> 2. Formatting Options
             </h2>
+            <div className="section-header-actions">
+              {defaultsSavedNotice ? (
+                <span className="save-feedback-badge">
+                  <Check size={13} /> Defaults saved
+                </span>
+              ) : isFormattingDirty ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-header-action btn-save-default"
+                    onClick={handleSaveDefaults}
+                    title="Save current formatting options as your personal defaults"
+                  >
+                    <BookmarkCheck size={14} /> Set as my default
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-header-action"
+                    onClick={handleResetDefaults}
+                    title="Reset formatting options to your saved defaults"
+                  >
+                    <RotateCcw size={13} /> Reset to defaults
+                  </button>
+                </>
+              ) : null}
+            </div>
           </div>
 
           <div className="toggle-grid">
