@@ -45,7 +45,7 @@ export interface BibleVersion {
   id: string | number;
   abbr: string;
   name: string;
-  provider: "esv" | "youversion" | "apibible";
+  provider: "esv" | "youversion" | "apibible" | "net";
   enabled: boolean;
 }
 
@@ -76,6 +76,13 @@ export const SUPPORTED_VERSIONS: BibleVersion[] = [
     abbr: "NASB",
     name: "New American Standard Bible",
     provider: "apibible",
+    enabled: true,
+  },
+  {
+    id: "NET",
+    abbr: "NET",
+    name: "New English Translation",
+    provider: "net",
     enabled: true,
   },
 ];
@@ -223,6 +230,9 @@ export const NIV_SHORT_CREDIT =
 export const NASB_SHORT_CREDIT =
   "Scripture taken from the NEW AMERICAN STANDARD BIBLE®, Copyright © 1960, 1971, 1977, 1995, 2020 by The Lockman Foundation. Used by permission.";
 
+export const NET_SHORT_CREDIT =
+  "Scripture quoted by permission. Quotations designated (NET) are from the NET Bible® copyright ©1996, 2019 by Biblical Studies Press, L.L.C. http://netbible.com All rights reserved.";
+
 export function getVersionCredit(versionAbbr: string): string {
   switch (versionAbbr.toUpperCase()) {
     case "ESV":
@@ -233,6 +243,8 @@ export function getVersionCredit(versionAbbr: string): string {
       return NIV_SHORT_CREDIT;
     case "NASB":
       return NASB_SHORT_CREDIT;
+    case "NET":
+      return NET_SHORT_CREDIT;
     default:
       return `Scripture quotations from the ${versionAbbr} Bible.`;
   }

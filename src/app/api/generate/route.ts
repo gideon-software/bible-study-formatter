@@ -10,6 +10,7 @@ import {
 } from "@/lib/bible/books";
 import { fetchEsvChapter } from "@/lib/bible/providers/esv";
 import { fetchApiBibleChapter } from "@/lib/bible/providers/apibible";
+import { fetchNetChapter } from "@/lib/bible/providers/net";
 import { createGoogleDocWithAuth } from "@/lib/google/docs";
 import { db } from "@/lib/db";
 import { executions, bibleCache } from "@/lib/db/schema";
@@ -118,7 +119,9 @@ export async function POST(request: Request) {
           (v) => String(v.id).toUpperCase() === version.toUpperCase()
         );
 
-        if (selectedVer?.provider === "apibible") {
+        if (selectedVer?.provider === "net") {
+          parsedCh = await fetchNetChapter(bookId, ch, options);
+        } else if (selectedVer?.provider === "apibible") {
           parsedCh = await fetchApiBibleChapter(bookId, ch, version, options);
         } else {
           parsedCh = await fetchEsvChapter(bookId, ch, options);
