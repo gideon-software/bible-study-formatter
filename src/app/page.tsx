@@ -456,10 +456,10 @@ export default function Home() {
                   setOptions({ ...options, lineSpacing: Number(e.target.value) })
                 }
               >
-                <option value={1.0}>1.0 (Single Spaced)</option>
+                <option value={1.0}>1.0 (Single spaced)</option>
                 <option value={1.15}>1.15 (Standard)</option>
                 <option value={1.5}>1.5 (Expanded)</option>
-                <option value={2.0}>2.0 (Double Spaced - Ideal for Notes)</option>
+                <option value={2.0}>2.0 (Double spaced - ideal for notes)</option>
               </select>
             </div>
           </div>
