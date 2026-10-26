@@ -16,8 +16,6 @@ import {
   FileText,
   Settings2,
   ExternalLink,
-  LogOut,
-  ShieldCheck,
   AlertCircle,
   RefreshCw,
   BookmarkCheck,
@@ -26,6 +24,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GoogleLogo } from "@/components/GoogleLogo";
+import { UserDropdown } from "@/components/UserDropdown";
 import { parseUrlSettings } from "@/lib/bible/urlParams";
 
 const FONT_FAMILY_MAP: Record<string, string> = {
@@ -54,7 +53,6 @@ export default function Home() {
   // Auth state
   const [user, setUser] = useState<{ name?: string; email?: string; picture?: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [avatarError, setAvatarError] = useState(false);
 
   // Form selections
   const [versionId, setVersionId] = useState(SYSTEM_DEFAULT_VERSION);
@@ -217,7 +215,6 @@ export default function Home() {
 
         if (authData.authenticated && authData.user) {
           setUser(authData.user);
-          setAvatarError(false);
           setIsAdmin(!!authData.isAdmin);
 
           // Fetch DB preferences for authenticated user
@@ -501,47 +498,20 @@ export default function Home() {
         </div>
 
         <div className="header-actions">
-          {/* Admin link - only visible when an authorized admin is logged in */}
-          {isAdmin && (
-            <a href="/admin" className="btn btn-secondary btn-sm">
-              <ShieldCheck size={16} /> Admin Portal
-            </a>
-          )}
-
           {/* Theme Mode Toggle (System / Light / Dark) */}
           <ThemeToggle />
 
-          {/* User Auth Pill */}
+          {/* User Profile Dropdown or Sign In */}
           {user ? (
-            <div className="user-pill">
-              {user.picture && !avatarError ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={user.picture}
-                  alt={user.name || "Avatar"}
-                  className="user-avatar"
-                  referrerPolicy="no-referrer"
-                  crossOrigin="anonymous"
-                  onError={() => setAvatarError(true)}
-                />
-              ) : (
-                <div className="user-avatar-fallback" aria-hidden="true">
-                  {(user.name || user.email || "G").charAt(0).toUpperCase()}
-                </div>
-              )}
-              <span>{user.name || user.email}</span>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={async () => {
-                  await fetch("/api/auth/google/logout", { method: "POST" });
-                  setUser(null);
-                  setIsAdmin(false);
-                }}
-                title="Sign out"
-              >
-                <LogOut size={14} />
-              </button>
-            </div>
+            <UserDropdown
+              user={user}
+              isAdmin={isAdmin}
+              onLogout={async () => {
+                await fetch("/api/auth/google/logout", { method: "POST" });
+                setUser(null);
+                setIsAdmin(false);
+              }}
+            />
           ) : (
             <a href="/api/auth/google/login" className="btn-google">
               <GoogleLogo size={16} /> Sign in with Google
