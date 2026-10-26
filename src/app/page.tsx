@@ -865,7 +865,7 @@ export default function Home() {
         <div className="glass-panel preview-panel">
           <div>
             <h2 className="section-title">
-              <FileText size={18} color="var(--accent-emerald)" /> Live Document Preview
+              <FileText size={18} color="var(--primary)" /> Live Document Preview
             </h2>
             <p className="preview-subtitle">
               Simulating formatting for <strong>{currentTitle}</strong>
