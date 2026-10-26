@@ -51,13 +51,6 @@ export interface BibleVersion {
 
 export const SUPPORTED_VERSIONS: BibleVersion[] = [
   {
-    id: "ESV",
-    abbr: "ESV",
-    name: "English Standard Version",
-    provider: "esv",
-    enabled: true,
-  },
-  {
     id: "CSB",
     abbr: "CSB",
     name: "Christian Standard Bible",
@@ -65,10 +58,10 @@ export const SUPPORTED_VERSIONS: BibleVersion[] = [
     enabled: true,
   },
   {
-    id: "NIV",
-    abbr: "NIV",
-    name: "New International Version",
-    provider: "apibible",
+    id: "ESV",
+    abbr: "ESV",
+    name: "English Standard Version",
+    provider: "esv",
     enabled: true,
   },
   {
@@ -83,6 +76,13 @@ export const SUPPORTED_VERSIONS: BibleVersion[] = [
     abbr: "NET",
     name: "New English Translation",
     provider: "net",
+    enabled: true,
+  },
+  {
+    id: "NIV",
+    abbr: "NIV",
+    name: "New International Version",
+    provider: "apibible",
     enabled: true,
   },
 ];

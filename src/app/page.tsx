@@ -275,7 +275,7 @@ export default function Home() {
               >
                 {SUPPORTED_VERSIONS.map((v) => (
                   <option key={v.id} value={v.abbr} disabled={!v.enabled}>
-                    {v.name} {!v.enabled ? "(Coming Soon)" : ""}
+                    {v.abbr}: {v.name}{!v.enabled ? " (Coming Soon)" : ""}
                   </option>
                 ))}
               </select>
