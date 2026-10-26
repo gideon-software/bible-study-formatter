@@ -53,7 +53,9 @@ describe("Google Docs Request Builder", () => {
     // InsertText request
     const insertReq = requests.find((r) => r.insertText);
     assert(insertReq, "Must include insertText");
-    assert(insertReq.insertText?.text?.includes("John (ESV)"));
+    assert(insertReq.insertText?.text?.includes("John\n"));
+    assert(!insertReq.insertText?.text?.includes("John (ESV)"));
+    assert(insertReq.insertText?.text?.includes("ESV • English Standard Version"));
     assert(insertReq.insertText?.text?.includes("In the beginning was the Word."));
 
     // Font styling request

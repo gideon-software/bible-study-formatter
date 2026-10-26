@@ -3,6 +3,7 @@ import {
   FormatOptions,
   ParsedChapter,
   getVersionCredit,
+  getVersionName,
 } from "../bible/books";
 
 export interface GoogleDocResult {
@@ -57,7 +58,8 @@ export function buildGoogleDocsRequests(
   if (options.titlePage) {
     fullText += "\n\n\n\n\n\n\n\n"; // 8 empty lines
     const titleStart = fullText.length + 1;
-    fullText += `${docTitle}\n`;
+    const titlePageHeading = docTitle.replace(/\s*\([^)]*\)$/, "");
+    fullText += `${titlePageHeading}\n`;
     styleRanges.push({
       startIndex: titleStart,
       endIndex: fullText.length,
@@ -70,7 +72,8 @@ export function buildGoogleDocsRequests(
     });
 
     const subTitleStart = fullText.length + 1;
-    fullText += `${versionAbbr}\n\n`;
+    const versionName = getVersionName(versionAbbr);
+    fullText += `${versionAbbr} • ${versionName}\n\n`;
     styleRanges.push({
       startIndex: subTitleStart,
       endIndex: fullText.length - 1,

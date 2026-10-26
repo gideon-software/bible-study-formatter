@@ -169,11 +169,19 @@ export function getBookChapters(bookId: string): number[] {
   return Array.from({ length: book.numChapters }, (_, i) => i + 1);
 }
 
-export function getDocTitle(
+export function getVersionName(versionAbbr: string): string {
+  const found = SUPPORTED_VERSIONS.find(
+    (v) =>
+      v.abbr.toUpperCase() === versionAbbr.toUpperCase() ||
+      String(v.id).toUpperCase() === versionAbbr.toUpperCase()
+  );
+  return found ? found.name : versionAbbr;
+}
+
+export function getPassageTitle(
   bookId: string,
   chapterStart: number,
-  chapterEnd: number,
-  versionAbbr: string = "ESV"
+  chapterEnd: number
 ): string {
   const book = getBookById(bookId);
   const bookName = book ? book.name : bookId;
@@ -181,14 +189,24 @@ export function getDocTitle(
     book && chapterStart === 1 && chapterEnd === book.numChapters;
 
   if (isFullBook) {
-    return `${bookName} (${versionAbbr})`;
+    return bookName;
   }
 
   if (chapterStart === chapterEnd) {
-    return `${bookName} ${chapterStart} (${versionAbbr})`;
+    return `${bookName} ${chapterStart}`;
   }
 
-  return `${bookName} ${chapterStart}-${chapterEnd} (${versionAbbr})`;
+  return `${bookName} ${chapterStart}-${chapterEnd}`;
+}
+
+export function getDocTitle(
+  bookId: string,
+  chapterStart: number,
+  chapterEnd: number,
+  versionAbbr: string = "ESV"
+): string {
+  const passageTitle = getPassageTitle(bookId, chapterStart, chapterEnd);
+  return `${passageTitle} (${versionAbbr})`;
 }
 
 /**

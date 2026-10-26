@@ -5,6 +5,8 @@ import {
   getBookById,
   getBookChapters,
   getDocTitle,
+  getPassageTitle,
+  getVersionName,
   validateEsvPassageRange,
 } from "./books";
 
@@ -39,13 +41,23 @@ describe("Bible Books & Utilities", () => {
     assert.strictEqual(psalmChapters[149], 150);
   });
 
-  it("formats document titles accurately", () => {
-    // Full book
+  it("formats document titles and passage titles accurately", () => {
+    // Passage titles (without version parentheses)
+    assert.strictEqual(getPassageTitle("JHN", 1, 21), "John");
+    assert.strictEqual(getPassageTitle("JHN", 1, 1), "John 1");
+    assert.strictEqual(getPassageTitle("ROM", 1, 8), "Romans 1-8");
+
+    // Full doc titles (with version parentheses)
     assert.strictEqual(getDocTitle("JHN", 1, 21, "ESV"), "John (ESV)");
-    // Single chapter
     assert.strictEqual(getDocTitle("JHN", 1, 1, "ESV"), "John 1 (ESV)");
-    // Chapter range
     assert.strictEqual(getDocTitle("ROM", 1, 8, "ESV"), "Romans 1-8 (ESV)");
+
+    // Version names
+    assert.strictEqual(getVersionName("ESV"), "English Standard Version");
+    assert.strictEqual(getVersionName("CSB"), "Christian Standard Bible");
+    assert.strictEqual(getVersionName("NIV"), "New International Version");
+    assert.strictEqual(getVersionName("NASB"), "New American Standard Bible");
+    assert.strictEqual(getVersionName("NET"), "New English Translation");
   });
 
   it("validates ESV passage ranges per Crossway policy", () => {

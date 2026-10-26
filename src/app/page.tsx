@@ -6,10 +6,10 @@ import {
   SUPPORTED_VERSIONS,
   FormatOptions,
   getBookChapters,
-  getDocTitle,
   validateEsvPassageRange,
   ESV_COPYRIGHT_NOTICE,
   getVersionCredit,
+  getVersionName,
 } from "@/lib/bible/books";
 import {
   BookOpen,
@@ -479,9 +479,6 @@ export default function Home() {
     }
   };
 
-  const selectedBook = BIBLE_BOOKS.find((b) => b.id === bookId);
-  const currentTitle = getDocTitle(bookId, chapterStart, chapterEnd, versionId);
-
   return (
     <div className="container">
       {/* App Header */}
@@ -838,7 +835,7 @@ export default function Home() {
               <FileText size={18} color="var(--primary)" /> Live Document Preview
             </h2>
             <p className="preview-subtitle">
-              Simulating formatting for <strong>{currentTitle}</strong>
+              Simulating formatting for <strong>John 1-3</strong>
             </p>
           </div>
 
@@ -854,25 +851,22 @@ export default function Home() {
             {/* Title Page Simulation */}
             {options.titlePage && (
               <div className="doc-title-page-preview">
-                <h2>{currentTitle}</h2>
-                <p>{versionId} • {SUPPORTED_VERSIONS.find((v) => v.id === versionId)?.name || versionId}</p>
+                <h2>John 1-3</h2>
+                <p>
+                  {versionId} • {getVersionName(versionId)}
+                </p>
               </div>
             )}
 
             {/* Chapter Header Simulation */}
             {options.chapterHeaders && (
-              <div className="doc-heading-preview">
-                {selectedBook?.name}{" "}
-                {selectedBook && selectedBook.numChapters > 1 ? chapterStart : ""}
-              </div>
+              <div className="doc-heading-preview">John 1</div>
             )}
 
             {/* Sample Scripture Prose */}
             <p>
               {options.verseNumbers && (
-                <span className="doc-verse-num">
-                  {options.chapterHeaders ? "1" : `${chapterStart}:1`}
-                </span>
+                <span className="doc-verse-num">1</span>
               )}
               In the beginning was the Word, and the Word was with God, and the
               Word was God.{" "}
