@@ -46,3 +46,52 @@ export async function exchangeCodeForTokens(code: string, redirectUri?: string) 
     },
   };
 }
+
+export interface SessionTokens {
+  accessToken?: string;
+  refreshToken?: string;
+  expiryDate?: number;
+}
+
+export async function getAuthenticatedClient(tokens: SessionTokens): Promise<{
+  client: InstanceType<typeof google.auth.OAuth2>;
+  refreshedTokens?: SessionTokens;
+}> {
+  const client = getOAuth2Client();
+  client.setCredentials({
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken,
+    expiry_date: tokens.expiryDate,
+  });
+
+  let refreshedTokens: SessionTokens | undefined;
+
+  client.on("tokens", (newTokens) => {
+    refreshedTokens = {
+      accessToken: newTokens.access_token || tokens.accessToken,
+      refreshToken: newTokens.refresh_token || tokens.refreshToken,
+      expiryDate: newTokens.expiry_date || tokens.expiryDate,
+    };
+  });
+
+  // If expiryDate has passed or is within 60s, proactively refresh
+  const isExpiringSoon =
+    tokens.expiryDate ? Date.now() >= tokens.expiryDate - 60_000 : false;
+
+  if (tokens.refreshToken && (isExpiringSoon || !tokens.accessToken)) {
+    try {
+      const response = await client.getAccessToken();
+      if (response?.token) {
+        refreshedTokens = {
+          accessToken: response.token,
+          refreshToken: client.credentials.refresh_token || tokens.refreshToken,
+          expiryDate: client.credentials.expiry_date || tokens.expiryDate,
+        };
+      }
+    } catch (err) {
+      console.warn("[Auth] Proactive token refresh error:", err);
+    }
+  }
+
+  return { client, refreshedTokens };
+}

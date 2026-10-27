@@ -12,6 +12,7 @@ import { fetchEsvChapter } from "@/lib/bible/providers/esv";
 import { fetchApiBibleChapter } from "@/lib/bible/providers/apibible";
 import { fetchNetChapter } from "@/lib/bible/providers/net";
 import { createGoogleDocWithAuth } from "@/lib/google/docs";
+import { getAuthenticatedClient } from "@/lib/google/auth";
 import { db } from "@/lib/db";
 import { executions, bibleCache } from "@/lib/db/schema";
 import { eq, desc, sql, inArray } from "drizzle-orm";
@@ -86,11 +87,10 @@ export async function POST(request: Request) {
     }
 
     const session = JSON.parse(sessionCookie.value);
-    const accessToken = session.accessToken;
     const userEmail = session.user?.email || "anonymous";
     userEmailForLock = userEmail;
 
-    if (!accessToken) {
+    if (!session.accessToken && !session.refreshToken) {
       return NextResponse.json(
         { error: "Invalid session", needsAuth: true },
         { status: 401 }
@@ -215,8 +215,14 @@ export async function POST(request: Request) {
 
     // 5. Build document title and create Google Doc
     const docTitle = getDocTitle(bookId, chapterStart, chapterEnd, version);
+    const { client: authClient, refreshedTokens } = await getAuthenticatedClient({
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      expiryDate: session.expiryDate,
+    });
+
     const docResult = await createGoogleDocWithAuth(
-      accessToken,
+      authClient,
       docTitle,
       chapters,
       options,
@@ -251,16 +257,57 @@ export async function POST(request: Request) {
       uncachedChaptersCount: uncachedDownloadedCount,
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       docId: docResult.docId,
       docUrl: docResult.docUrl,
       docName: docResult.docName,
       durationMs,
     });
+
+    // If Google OAuth tokens were refreshed, update session cookie
+    if (refreshedTokens) {
+      const updatedSession = {
+        ...session,
+        accessToken: refreshedTokens.accessToken || session.accessToken,
+        refreshToken: refreshedTokens.refreshToken || session.refreshToken,
+        expiryDate: refreshedTokens.expiryDate || session.expiryDate,
+      };
+      response.cookies.set("bsf_session", JSON.stringify(updatedSession), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+      });
+    }
+
+    return response;
   } catch (error: unknown) {
     console.error("[Generate] Doc generation failure:", error);
     const details = error instanceof Error ? error.message : String(error);
+
+    // Check if error is due to expired Google credentials
+    const isAuthError =
+      details.includes("invalid authentication credentials") ||
+      details.includes("invalid_grant") ||
+      details.includes("Invalid Credentials") ||
+      details.includes("Unauthorized") ||
+      (typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code: unknown }).code === 401);
+
+    if (isAuthError) {
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          message: "Your Google session has expired. Please sign in again.",
+          needsAuth: true,
+        },
+        { status: 401 }
+      );
+    }
 
     // Send immediate failure alert
     await sendAlert({

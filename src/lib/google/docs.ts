@@ -275,14 +275,19 @@ export function buildGoogleDocsRequests(
  * Creates the Google Doc directly in the user's Drive using OAuth 2.0 access token
  */
 export async function createGoogleDocWithAuth(
-  accessToken: string,
+  authInput: InstanceType<typeof google.auth.OAuth2> | string,
   docTitle: string,
   chapters: ParsedChapter[],
   options: FormatOptions,
   versionAbbr: string = "ESV"
 ): Promise<GoogleDocResult> {
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
+  let auth: InstanceType<typeof google.auth.OAuth2>;
+  if (typeof authInput === "string") {
+    auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: authInput });
+  } else {
+    auth = authInput;
+  }
 
   const docs = google.docs({ version: "v1", auth });
 
