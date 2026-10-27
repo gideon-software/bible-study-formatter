@@ -81,6 +81,8 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState("");
   const [createdDoc, setCreatedDoc] = useState<{ id: string; url: string; name: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
 
   // Available chapters for selected book
   const chapters = useMemo(() => getBookChapters(bookId), [bookId]);
@@ -434,6 +436,8 @@ export default function Home() {
     setProgress(null); // indeterminate initially
     setStatusMessage("Connecting to Google Docs API...");
     setErrorMsg(null);
+    setErrorDetails(null);
+    setShowErrorDetails(false);
     setCreatedDoc(null);
 
     try {
@@ -460,7 +464,12 @@ export default function Home() {
           window.location.href = "/api/auth/google/login";
           return;
         }
-        throw new Error(result.message || result.error || "Generation failed");
+        setErrorMsg(result.message || result.error || "Generation failed");
+        if (result.details) {
+          setErrorDetails(result.details);
+        }
+        setStatusMessage("");
+        return;
       }
 
       setProgress(100);
@@ -913,8 +922,44 @@ export default function Home() {
 
               {errorMsg && (
                 <div className="status-error">
-                  <AlertCircle size={16} />
-                  <span>{errorMsg}</span>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", width: "100%" }}>
+                    <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+                    <div style={{ flex: 1 }}>
+                      <div>{errorMsg}</div>
+                      {errorDetails && (
+                        <div style={{ marginTop: "0.35rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowErrorDetails((prev) => !prev)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "inherit",
+                              textDecoration: "underline",
+                              cursor: "pointer",
+                              padding: 0,
+                              fontSize: "0.82rem",
+                              opacity: 0.9,
+                            }}
+                          >
+                            {showErrorDetails ? "Hide details" : "More details"}
+                          </button>
+                          {showErrorDetails && (
+                            <p
+                              style={{
+                                marginTop: "0.35rem",
+                                fontSize: "0.82rem",
+                                opacity: 0.85,
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              {errorDetails}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 

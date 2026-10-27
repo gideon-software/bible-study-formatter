@@ -14,11 +14,18 @@ import { fetchNetChapter } from "@/lib/bible/providers/net";
 import { createGoogleDocWithAuth } from "@/lib/google/docs";
 import { db } from "@/lib/db";
 import { executions, bibleCache } from "@/lib/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 import { sendAlert } from "@/lib/alerts/notify";
+import {
+  checkRateLimit,
+  releaseInFlightLock,
+  recordRateLimitEvents,
+} from "@/lib/bible/rateLimit";
 
 export async function POST(request: Request) {
   const startTime = Date.now();
+  let lockAcquired = false;
+  let userEmailForLock: string | null = null;
 
   try {
     const body = await request.json();
@@ -81,6 +88,7 @@ export async function POST(request: Request) {
     const session = JSON.parse(sessionCookie.value);
     const accessToken = session.accessToken;
     const userEmail = session.user?.email || "anonymous";
+    userEmailForLock = userEmail;
 
     if (!accessToken) {
       return NextResponse.json(
@@ -89,8 +97,48 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Fetch and parse each chapter (using Neon cache if available)
+    // 2. Estimate uncached chapters before starting
+    let estimatedUncached = chapterEnd - chapterStart + 1;
+    if (db) {
+      try {
+        const neededKeys: string[] = [];
+        for (let ch = chapterStart; ch <= chapterEnd; ch++) {
+          neededKeys.push(`${version}/${bookId}/${ch}`);
+        }
+        if (neededKeys.length > 0) {
+          const existing = await db
+            .select({ key: bibleCache.passageKey })
+            .from(bibleCache)
+            .where(inArray(bibleCache.passageKey, neededKeys));
+          estimatedUncached = Math.max(0, neededKeys.length - existing.length);
+        }
+      } catch (cacheCheckErr) {
+        console.warn("[RateLimit] Cache check error:", cacheCheckErr);
+      }
+    }
+
+    // 3. Check rate limits
+    const rateCheck = await checkRateLimit({
+      userEmail,
+      requestedUncachedCount: estimatedUncached,
+    });
+
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: rateCheck.error || "Rate Limit Exceeded",
+          message: rateCheck.message,
+          details: rateCheck.details,
+          retryAfterSeconds: rateCheck.retryAfterSeconds,
+        },
+        { status: 429 }
+      );
+    }
+    lockAcquired = true;
+
+    // 4. Fetch and parse each chapter (using Neon cache if available)
     const chapters: ParsedChapter[] = [];
+    let uncachedDownloadedCount = 0;
 
     for (let ch = chapterStart; ch <= chapterEnd; ch++) {
       const cacheKey = `${version}/${bookId}/${ch}`;
@@ -115,6 +163,7 @@ export async function POST(request: Request) {
 
       // If not cached, fetch from provider
       if (!parsedCh) {
+        uncachedDownloadedCount++;
         const selectedVer = SUPPORTED_VERSIONS.find(
           (v) => String(v.id).toUpperCase() === version.toUpperCase()
         );
@@ -164,7 +213,7 @@ export async function POST(request: Request) {
       chapters.push(parsedCh);
     }
 
-    // 3. Build document title and create Google Doc
+    // 5. Build document title and create Google Doc
     const docTitle = getDocTitle(bookId, chapterStart, chapterEnd, version);
     const docResult = await createGoogleDocWithAuth(
       accessToken,
@@ -176,7 +225,7 @@ export async function POST(request: Request) {
 
     const durationMs = Date.now() - startTime;
 
-    // 4. Log execution to Neon DB
+    // 6. Log execution and rate limit events to Neon DB
     if (db) {
       try {
         await db.insert(executions).values({
@@ -195,6 +244,12 @@ export async function POST(request: Request) {
         console.error("[DB] Execution log error:", logErr);
       }
     }
+
+    // Record rate limit events (doc generation + any uncached chapters downloaded)
+    await recordRateLimitEvents({
+      userEmail,
+      uncachedChaptersCount: uncachedDownloadedCount,
+    });
 
     return NextResponse.json({
       success: true,
@@ -221,5 +276,9 @@ export async function POST(request: Request) {
       },
       { status: 500 }
     );
+  } finally {
+    if (lockAcquired && userEmailForLock) {
+      releaseInFlightLock(userEmailForLock);
+    }
   }
 }

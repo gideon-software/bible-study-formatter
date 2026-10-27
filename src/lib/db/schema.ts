@@ -65,9 +65,21 @@ export const userPreferences = pgTable("user_preferences", {
     .notNull(),
 });
 
+export const rateLimitEvents = pgTable("rate_limit_events", {
+  id: serial("id").primaryKey(),
+  userEmail: varchar("user_email", { length: 255 }).notNull(),
+  eventType: varchar("event_type", { length: 50 }).notNull(), // "doc_generation" | "uncached_chapter"
+  units: integer("units").default(1).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export type Execution = typeof executions.$inferSelect;
 export type NewExecution = typeof executions.$inferInsert;
 export type MissingElement = typeof missingElements.$inferSelect;
 export type NewMissingElement = typeof missingElements.$inferInsert;
 export type UserPreference = typeof userPreferences.$inferSelect;
 export type NewUserPreference = typeof userPreferences.$inferInsert;
+export type RateLimitEvent = typeof rateLimitEvents.$inferSelect;
+export type NewRateLimitEvent = typeof rateLimitEvents.$inferInsert;
