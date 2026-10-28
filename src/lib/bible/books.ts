@@ -44,6 +44,96 @@ export interface ParsedChapter {
 }
 
 /**
+ * Normalizes text runs within a paragraph to clean up upstream API artifacts
+ * (such as CSB's `#—#` em-dash markers and orphaned `\u00A0` spaces left behind
+ * when API.Bible strips `<span class="f">` footnotes before punctuation or spaces).
+ */
+export function normalizeParagraphRuns(runs: TextRun[]): TextRun[] {
+  const result: TextRun[] = [];
+
+  for (const rawRun of runs) {
+    if (rawRun.superscript) {
+      // If a preceding text run ended with an em-dash and trailing space, remove the space
+      if (result.length > 0 && !result[result.length - 1].superscript) {
+        result[result.length - 1].text = result[result.length - 1].text.replace(
+          /— +$/,
+          "—"
+        );
+      }
+      result.push({ ...rawRun });
+      continue;
+    }
+
+    let text = rawRun.text
+      // Convert any non-breaking spaces inside body text runs into regular spaces
+      .replace(/\u00A0/g, " ")
+      // Strip Holman CSB `#—#` typesetting markers around em-dashes
+      .replace(/\s*#—\s*#\s*/g, "—")
+      .replace(/\s*#—\s*/g, "—")
+      .replace(/\s*—#\s*/g, "—")
+      // Collapse multiple consecutive spaces into a single space
+      .replace(/ {2,}/g, " ")
+      // Remove spaces immediately before closing punctuation, quotes, or em-dashes
+      .replace(/ +([)\]\u201D\u2019.,;:?!—])/g, "$1")
+      // Remove spaces immediately after opening parens/brackets or em-dashes
+      .replace(/([(\[—]) +/g, "$1");
+
+    // Strip trailing spaces from preceding non-superscript runs if this run starts with closing punctuation or em-dash
+    while (
+      result.length > 0 &&
+      !result[result.length - 1].superscript &&
+      /^[)\]\u201D\u2019.,;:?!—]/.test(text) &&
+      result[result.length - 1].text.endsWith(" ")
+    ) {
+      const prev = result[result.length - 1];
+      prev.text = prev.text.replace(/ +$/, "");
+      if (prev.text.length === 0) {
+        result.pop();
+      } else {
+        break;
+      }
+    }
+
+    if (result.length === 0) {
+      text = text.replace(/^ +/, "");
+    } else {
+      const prev = result[result.length - 1];
+      if (prev.superscript) {
+        text = text.replace(/^ +/, "");
+      } else {
+        if (/[(\[—]$/.test(prev.text)) {
+          text = text.replace(/^ +/, "");
+        }
+        if (prev.text.endsWith(" ") && text.startsWith(" ")) {
+          text = text.replace(/^ +/, "");
+        }
+      }
+    }
+
+    if (text.length > 0) {
+      result.push({ ...rawRun, text });
+    }
+  }
+
+  // Trim trailing spaces from the final run of the paragraph
+  while (
+    result.length > 0 &&
+    !result[result.length - 1].superscript &&
+    result[result.length - 1].text.endsWith(" ")
+  ) {
+    const last = result[result.length - 1];
+    last.text = last.text.replace(/ +$/, "");
+    if (last.text.length === 0) {
+      result.pop();
+    } else {
+      break;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Applies user FormatOptions (chapterHeaders, sectionHeadings, verseNumbers)
  * to a ParsedChapter (such as a full chapter retrieved from cache).
  */
@@ -83,7 +173,9 @@ export function applyOptionsToChapter(
 
     if (p.type === "paragraph" || p.type === "poetry") {
       if (!options.verseNumbers) {
-        const runsWithoutVerses = p.runs.filter((r) => !r.superscript);
+        const runsWithoutVerses = normalizeParagraphRuns(
+          p.runs.filter((r) => !r.superscript)
+        );
         if (runsWithoutVerses.length > 0) {
           filteredParagraphs.push({
             ...p,
@@ -92,24 +184,28 @@ export function applyOptionsToChapter(
         }
       } else {
         // Adjust verse 1 label based on whether chapterHeaders is enabled
-        const adjustedRuns = p.runs.map((r) => {
-          if (!r.superscript) return r;
-          const trimmed = r.text.trim();
-          if (!options.chapterHeaders && trimmed === "1") {
-            return { ...r, text: `${chapter.chapterNum}:1\u00A0` };
-          }
-          if (
-            options.chapterHeaders &&
-            trimmed === `${chapter.chapterNum}:1`
-          ) {
-            return { ...r, text: "1\u00A0" };
-          }
-          return r;
-        });
-        filteredParagraphs.push({
-          ...p,
-          runs: adjustedRuns,
-        });
+        const adjustedRuns = normalizeParagraphRuns(
+          p.runs.map((r) => {
+            if (!r.superscript) return r;
+            const trimmed = r.text.trim();
+            if (!options.chapterHeaders && trimmed === "1") {
+              return { ...r, text: `${chapter.chapterNum}:1\u00A0` };
+            }
+            if (
+              options.chapterHeaders &&
+              trimmed === `${chapter.chapterNum}:1`
+            ) {
+              return { ...r, text: "1\u00A0" };
+            }
+            return r;
+          })
+        );
+        if (adjustedRuns.length > 0) {
+          filteredParagraphs.push({
+            ...p,
+            runs: adjustedRuns,
+          });
+        }
       }
       return;
     }

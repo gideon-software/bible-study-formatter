@@ -6,6 +6,7 @@ import {
   ParsedChapter,
   TextRun,
   getBookById,
+  normalizeParagraphRuns,
 } from "../books";
 
 export const API_BIBLE_DEFAULT_IDS: Record<string, string> = {
@@ -68,7 +69,7 @@ export function parseApiBibleHtml(
     const className = $el.attr("class") || "";
 
     // Skip footnotes and crossrefs container or chapter markers
-    if ($el.hasClass("c") || $el.hasClass("f") || $el.hasClass("x")) {
+    if (/\b(c|cp|ca|cl|f|fe|x)\b/.test(className)) {
       return;
     }
 
@@ -143,13 +144,18 @@ function extractRuns(
 ): TextRun[] {
   const runs: TextRun[] = [];
 
-  function traverse(node: AnyNode, currentStyle: { bold?: boolean; italic?: boolean }) {
+  function traverse(
+    node: AnyNode,
+    currentStyle: { bold?: boolean; italic?: boolean; uppercase?: boolean }
+  ) {
     if (node.type === "text") {
-      const text = (node as { data?: string }).data;
-      if (text) {
+      const rawText = (node as { data?: string }).data;
+      if (rawText) {
+        const text = currentStyle.uppercase ? rawText.toUpperCase() : rawText;
         runs.push({
           text,
-          ...currentStyle,
+          ...(currentStyle.bold ? { bold: true } : {}),
+          ...(currentStyle.italic ? { italic: true } : {}),
         });
       }
       return;
@@ -181,12 +187,12 @@ function extractRuns(
         return; // Don't traverse inside verse number marker
       }
 
-      // 2. Ignore Footnotes (\f), Cross References (\x), and Chapter Labels (\c)
-      if (/\b(f|fe|x|c)\b/.test(className)) {
+      // 2. Ignore Footnotes (\f), Cross References (\x), and Chapter Labels (\c, \cp, \ca)
+      if (/\b(f|fe|x|c|cp|ca|cl)\b/.test(className)) {
         return;
       }
 
-      // 3. Styling markers (bold, italic, translator additions, words of Jesus)
+      // 3. Styling markers (bold, italic, translator additions, divine name / small caps)
       const isBold =
         currentStyle.bold ||
         elem.name === "b" ||
@@ -197,10 +203,17 @@ function extractRuns(
         currentStyle.italic ||
         elem.name === "i" ||
         elem.name === "em" ||
-        /\b(it|add|bk)\b/.test(className);
+        /\b(it|add|bk|qt)\b/.test(className);
+
+      const isUppercase =
+        currentStyle.uppercase || /\b(nd|sc)\b/.test(className);
 
       elem.children?.forEach((child) => {
-        traverse(child, { bold: isBold, italic: isItalic });
+        traverse(child, {
+          bold: isBold,
+          italic: isItalic,
+          uppercase: isUppercase,
+        });
       });
     }
   }
@@ -209,7 +222,7 @@ function extractRuns(
     traverse(child, {});
   });
 
-  return runs;
+  return normalizeParagraphRuns(runs);
 }
 
 /**
