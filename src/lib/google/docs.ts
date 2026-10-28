@@ -43,7 +43,7 @@ export function buildGoogleDocsRequests(
   const styleRanges: Array<{
     startIndex: number;
     endIndex: number;
-    type: "superscript" | "bold" | "italic" | "title" | "subtitle";
+    type: "superscript" | "bold" | "italic" | "title" | "subtitle" | "copyright";
   }> = [];
 
   const paragraphRanges: Array<{
@@ -53,6 +53,8 @@ export function buildGoogleDocsRequests(
     indentSpaces?: number;
     lineSpacing?: number;
   }> = [];
+
+  const pageBreakIndices: number[] = [];
 
   // 2. Add Title Page if requested
   if (options.titlePage) {
@@ -93,24 +95,25 @@ export function buildGoogleDocsRequests(
       styleRanges.push({
         startIndex: creditStart,
         endIndex: fullText.length,
-        type: "subtitle",
+        type: "copyright",
       });
       paragraphRanges.push({
         startIndex: creditStart,
         endIndex: fullText.length,
         alignment: "CENTER",
+        lineSpacing: 100,
       });
     }
 
-    // Page break placeholder
-    fullText += "\u000C"; // form feed / page break
+    // Record page break location after title page
+    pageBreakIndices.push(fullText.length + 1);
   }
 
   // 3. Process Each Chapter
   chapters.forEach((chapter, chIdx) => {
-    // If not first chapter and chapterPageBreaks is enabled, add page break
+    // If not first chapter and chapterPageBreaks is enabled, record page break location
     if (chIdx > 0 && options.chapterPageBreaks) {
-      fullText += "\u000C";
+      pageBreakIndices.push(fullText.length + 1);
     }
 
     chapter.paragraphs.forEach((p) => {
@@ -122,16 +125,24 @@ export function buildGoogleDocsRequests(
       }
 
       p.runs.forEach((run) => {
+        // Strip any control characters that Google Docs insertText would remove
+        const cleanText = run.text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\r]/g, "");
+        if (!cleanText) return;
+
         const runStart = fullText.length + 1;
-        fullText += run.text;
+        fullText += cleanText;
         const runEnd = fullText.length + 1;
 
         if (run.superscript) {
-          styleRanges.push({
-            startIndex: runStart,
-            endIndex: runEnd,
-            type: "superscript",
-          });
+          // Only superscript the verse number itself, keeping the trailing non-breaking space (\u00A0) in regular font
+          const visibleText = cleanText.replace(/[\u00A0\s]+$/, "");
+          if (visibleText.length > 0) {
+            styleRanges.push({
+              startIndex: runStart,
+              endIndex: runStart + visibleText.length,
+              type: "superscript",
+            });
+          }
         }
         if (run.bold) {
           styleRanges.push({
@@ -170,17 +181,19 @@ export function buildGoogleDocsRequests(
   if (!options.titlePage) {
     const footerCredit = getVersionCredit(versionAbbr);
     if (footerCredit) {
-      fullText += `\n${footerCredit}\n`;
-      const creditStart = fullText.length - footerCredit.length - 1;
+      fullText += "\n";
+      const creditStart = fullText.length + 1;
+      fullText += `${footerCredit}\n`;
       styleRanges.push({
         startIndex: creditStart,
         endIndex: fullText.length,
-        type: "subtitle",
+        type: "copyright",
       });
       paragraphRanges.push({
         startIndex: creditStart,
-        endIndex: fullText.length,
+        endIndex: fullText.length + 1,
         alignment: "CENTER",
+        lineSpacing: 100,
       });
     }
   }
@@ -253,6 +266,10 @@ export function buildGoogleDocsRequests(
         textStyle.italic = true;
         textStyle.fontSize = { magnitude: 11, unit: "PT" };
         fields.push("italic", "fontSize");
+      } else if (sr.type === "copyright") {
+        textStyle.italic = true;
+        textStyle.fontSize = { magnitude: 8, unit: "PT" };
+        fields.push("italic", "fontSize");
       }
 
       requests.push({
@@ -266,6 +283,17 @@ export function buildGoogleDocsRequests(
         },
       });
     });
+
+    // Insert Page Breaks in reverse index order so earlier indices are not shifted
+    [...pageBreakIndices]
+      .sort((a, b) => b - a)
+      .forEach((pbIndex) => {
+        requests.push({
+          insertPageBreak: {
+            location: { index: pbIndex },
+          },
+        });
+      });
   }
 
   return requests;

@@ -28,7 +28,7 @@ describe("Crossway ESV HTML Parser", () => {
     lineSpacing: 2,
   };
 
-  it("extracts chapter heading and section heading when chapterHeaders is true", () => {
+  it("extracts chapter heading and omits section heading by default (sectionHeadings: false)", () => {
     const parsed = parseEsvHtml(sampleEsvHtml, "JHN", 1, defaultOptions);
     assert.strictEqual(parsed.bookName, "John");
     assert.strictEqual(parsed.chapterNum, 1);
@@ -38,9 +38,20 @@ describe("Crossway ESV HTML Parser", () => {
     assert.strictEqual(firstP.type, "heading");
     assert.strictEqual(firstP.runs[0].text, "John 1");
 
-    // Should have "The Word Became Flesh" section heading
+    // Second paragraph should be prose, not the section heading
+    const secondP = parsed.paragraphs[1];
+    assert.strictEqual(secondP.type, "paragraph");
+  });
+
+  it("extracts section heading when sectionHeadings is true", () => {
+    const parsed = parseEsvHtml(sampleEsvHtml, "JHN", 1, {
+      ...defaultOptions,
+      sectionHeadings: true,
+    });
+
     const secondP = parsed.paragraphs[1];
     assert.strictEqual(secondP.type, "heading");
+    assert.strictEqual(secondP.isSectionHeading, true);
     assert.strictEqual(secondP.runs[0].text, "The Word Became Flesh");
   });
 
@@ -83,7 +94,10 @@ describe("Crossway ESV HTML Parser", () => {
       <p class="starts-chapter"><b class="chapter-num">1:1&nbsp;</b>Paul, a servant of Christ Jesus, <b class="verse-num">2&nbsp;</b>which he promised beforehand.</p>
     `;
 
-    const parsed = parseEsvHtml(rawApiHtml, "ROM", 1, defaultOptions);
+    const parsed = parseEsvHtml(rawApiHtml, "ROM", 1, {
+      ...defaultOptions,
+      sectionHeadings: true,
+    });
     assert.strictEqual(parsed.paragraphs.length, 3); // 1. "Romans 1", 2. "Greeting", 3. verse text
 
     const verseP = parsed.paragraphs[2];

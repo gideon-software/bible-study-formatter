@@ -11,6 +11,7 @@ export interface FormatOptions {
   chapterHeaders: boolean;
   chapterPageBreaks: boolean;
   verseNumbers: boolean;
+  sectionHeadings?: boolean;
   titlePage: boolean;
   fontName: string;
   fontSize: number;
@@ -29,6 +30,7 @@ export interface TextRun {
 
 export interface DocParagraph {
   type: "paragraph" | "heading" | "poetry" | "pageBreak" | "titlePage";
+  isSectionHeading?: boolean;
   alignment?: TextAlignment;
   indentSpaces?: number; // 0, 4, 8 for poetry indents
   runs: TextRun[];
@@ -39,6 +41,86 @@ export interface ParsedChapter {
   bookName: string;
   chapterNum: number;
   paragraphs: DocParagraph[];
+}
+
+/**
+ * Applies user FormatOptions (chapterHeaders, sectionHeadings, verseNumbers)
+ * to a ParsedChapter (such as a full chapter retrieved from cache).
+ */
+export function applyOptionsToChapter(
+  chapter: ParsedChapter,
+  options: FormatOptions
+): ParsedChapter {
+  const book = getBookById(chapter.bookId);
+  const expectedChapterHeader =
+    book && book.numChapters > 1
+      ? `${chapter.bookName} ${chapter.chapterNum}`
+      : chapter.bookName;
+
+  const includeSectionHeadings = Boolean(options.sectionHeadings);
+  const filteredParagraphs: DocParagraph[] = [];
+
+  chapter.paragraphs.forEach((p, idx) => {
+    if (p.type === "heading") {
+      const fullHeadingText = p.runs.map((r) => r.text).join("").trim();
+      const isMainChapterHeader =
+        !p.isSectionHeading &&
+        idx === 0 &&
+        fullHeadingText === expectedChapterHeader;
+
+      if (isMainChapterHeader) {
+        if (options.chapterHeaders) {
+          filteredParagraphs.push(p);
+        }
+      } else {
+        // Section heading
+        if (includeSectionHeadings) {
+          filteredParagraphs.push(p);
+        }
+      }
+      return;
+    }
+
+    if (p.type === "paragraph" || p.type === "poetry") {
+      if (!options.verseNumbers) {
+        const runsWithoutVerses = p.runs.filter((r) => !r.superscript);
+        if (runsWithoutVerses.length > 0) {
+          filteredParagraphs.push({
+            ...p,
+            runs: runsWithoutVerses,
+          });
+        }
+      } else {
+        // Adjust verse 1 label based on whether chapterHeaders is enabled
+        const adjustedRuns = p.runs.map((r) => {
+          if (!r.superscript) return r;
+          const trimmed = r.text.trim();
+          if (!options.chapterHeaders && trimmed === "1") {
+            return { ...r, text: `${chapter.chapterNum}:1\u00A0` };
+          }
+          if (
+            options.chapterHeaders &&
+            trimmed === `${chapter.chapterNum}:1`
+          ) {
+            return { ...r, text: "1\u00A0" };
+          }
+          return r;
+        });
+        filteredParagraphs.push({
+          ...p,
+          runs: adjustedRuns,
+        });
+      }
+      return;
+    }
+
+    filteredParagraphs.push(p);
+  });
+
+  return {
+    ...chapter,
+    paragraphs: filteredParagraphs,
+  };
 }
 
 export interface BibleVersion {

@@ -173,6 +173,14 @@ export function parseUrlSettings(search: string | URLSearchParams): ParsedUrlSet
     hasFormatOption = true;
   }
 
+  const sections = parseBoolParam(
+    params.get("sections") || params.get("sectionHeadings")
+  );
+  if (sections !== undefined) {
+    optionsObj.sectionHeadings = sections;
+    hasFormatOption = true;
+  }
+
   const titlePage = parseBoolParam(params.get("titlePage") || params.get("title"));
   if (titlePage !== undefined) {
     optionsObj.titlePage = titlePage;

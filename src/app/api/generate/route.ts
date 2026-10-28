@@ -7,6 +7,7 @@ import {
   ParsedChapter,
   SUPPORTED_VERSIONS,
   validateEsvPassageRange,
+  applyOptionsToChapter,
 } from "@/lib/bible/books";
 import { fetchEsvChapter } from "@/lib/bible/providers/esv";
 import { fetchApiBibleChapter } from "@/lib/bible/providers/apibible";
@@ -161,19 +162,26 @@ export async function POST(request: Request) {
         }
       }
 
-      // If not cached, fetch from provider
+      // If not cached, fetch from provider with full structural options so cache is reusable
       if (!parsedCh) {
         uncachedDownloadedCount++;
         const selectedVer = SUPPORTED_VERSIONS.find(
           (v) => String(v.id).toUpperCase() === version.toUpperCase()
         );
 
+        const fullCacheOptions: FormatOptions = {
+          ...options,
+          chapterHeaders: true,
+          sectionHeadings: true,
+          verseNumbers: true,
+        };
+
         if (selectedVer?.provider === "net") {
-          parsedCh = await fetchNetChapter(bookId, ch, options);
+          parsedCh = await fetchNetChapter(bookId, ch, fullCacheOptions);
         } else if (selectedVer?.provider === "apibible") {
-          parsedCh = await fetchApiBibleChapter(bookId, ch, version, options);
+          parsedCh = await fetchApiBibleChapter(bookId, ch, version, fullCacheOptions);
         } else {
-          parsedCh = await fetchEsvChapter(bookId, ch, options);
+          parsedCh = await fetchEsvChapter(bookId, ch, fullCacheOptions);
         }
 
         // Store into Neon DB cache
@@ -210,7 +218,7 @@ export async function POST(request: Request) {
         }
       }
 
-      chapters.push(parsedCh);
+      chapters.push(applyOptionsToChapter(parsedCh, options));
     }
 
     // 5. Build document title and create Google Doc

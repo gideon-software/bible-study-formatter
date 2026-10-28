@@ -28,7 +28,7 @@ describe("API.Bible HTML Parser (CSB, NIV, NASB)", () => {
     lineSpacing: 2,
   };
 
-  it("extracts chapter heading and section heading when chapterHeaders is true", () => {
+  it("extracts chapter heading and omits section heading by default (sectionHeadings: false)", () => {
     const parsed = parseApiBibleHtml(sampleApiBibleHtml, "JHN", 1, defaultOptions);
     assert.strictEqual(parsed.bookName, "John");
     assert.strictEqual(parsed.chapterNum, 1);
@@ -38,9 +38,20 @@ describe("API.Bible HTML Parser (CSB, NIV, NASB)", () => {
     assert.strictEqual(firstP.type, "heading");
     assert.strictEqual(firstP.runs[0].text, "John 1");
 
-    // Should have "The Word Became Flesh" section heading
+    // Second paragraph should be prose, not the section heading
+    const secondP = parsed.paragraphs[1];
+    assert.strictEqual(secondP.type, "paragraph");
+  });
+
+  it("extracts section heading when sectionHeadings is true", () => {
+    const parsed = parseApiBibleHtml(sampleApiBibleHtml, "JHN", 1, {
+      ...defaultOptions,
+      sectionHeadings: true,
+    });
+
     const secondP = parsed.paragraphs[1];
     assert.strictEqual(secondP.type, "heading");
+    assert.strictEqual(secondP.isSectionHeading, true);
     assert.strictEqual(secondP.runs[0].text, "The Word Became Flesh");
   });
 

@@ -77,11 +77,12 @@ export function parseApiBibleHtml(
       ["h2", "h3", "h4"].includes(tagName) ||
       /\b(s[1-4]?|ms[1-4]?|r|mr)\b/.test(className)
     ) {
-      if (options.chapterHeaders) {
+      if (options.sectionHeadings) {
         const text = $el.text().trim();
         if (text) {
           paragraphs.push({
             type: "heading",
+            isSectionHeading: true,
             alignment: "center",
             runs: [{ text, bold: true }],
           });
@@ -244,7 +245,7 @@ export async function fetchApiBibleChapter(
   const queryParams = new URLSearchParams({
     "content-type": "html",
     "include-notes": "false",
-    "include-titles": String(options.chapterHeaders),
+    "include-titles": String(Boolean(options.sectionHeadings)),
     "include-chapter-numbers": "false",
     "include-verse-numbers": String(options.verseNumbers),
     "include-verse-spans": "false",

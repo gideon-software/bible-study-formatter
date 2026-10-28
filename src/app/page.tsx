@@ -41,6 +41,7 @@ const SYSTEM_DEFAULT_OPTIONS: FormatOptions = {
   chapterHeaders: true,
   chapterPageBreaks: true,
   verseNumbers: true,
+  sectionHeadings: false,
   titlePage: false,
   fontName: "Arial",
   fontSize: 11,
@@ -93,6 +94,7 @@ export default function Home() {
       options.chapterHeaders !== savedDefaults.options.chapterHeaders ||
       options.chapterPageBreaks !== savedDefaults.options.chapterPageBreaks ||
       options.verseNumbers !== savedDefaults.options.verseNumbers ||
+      Boolean(options.sectionHeadings) !== Boolean(savedDefaults.options.sectionHeadings) ||
       options.titlePage !== savedDefaults.options.titlePage ||
       options.fontName !== savedDefaults.options.fontName ||
       options.fontSize !== savedDefaults.options.fontSize ||
@@ -682,7 +684,7 @@ export default function Home() {
           {/* Section: Formatting Switches */}
           <div className="section-header-container">
             <h2 className="section-title">
-              <Settings2 size={18} color="var(--primary)" /> 2. Formatting Options
+              <Settings2 size={18} color="var(--primary)" /> 2. Formatting options
             </h2>
             <div className="section-header-actions">
               {defaultsSavedNotice ? (
@@ -714,7 +716,7 @@ export default function Home() {
 
           <div className="toggle-grid">
             <label className="switch-label">
-              <span>Chapter Headers</span>
+              <span>Chapter headers</span>
               <input
                 type="checkbox"
                 className="switch-input"
@@ -726,7 +728,7 @@ export default function Home() {
             </label>
 
             <label className="switch-label">
-              <span>Chapter Page Breaks</span>
+              <span>Chapter page breaks</span>
               <input
                 type="checkbox"
                 className="switch-input"
@@ -738,7 +740,7 @@ export default function Home() {
             </label>
 
             <label className="switch-label">
-              <span>Verse Numbers</span>
+              <span>Verse numbers</span>
               <input
                 type="checkbox"
                 className="switch-input"
@@ -750,7 +752,19 @@ export default function Home() {
             </label>
 
             <label className="switch-label">
-              <span>Title Page</span>
+              <span>Section headings</span>
+              <input
+                type="checkbox"
+                className="switch-input"
+                checked={Boolean(options.sectionHeadings)}
+                onChange={(e) =>
+                  setOptions({ ...options, sectionHeadings: e.target.checked })
+                }
+              />
+            </label>
+
+            <label className="switch-label">
+              <span>Title page</span>
               <input
                 type="checkbox"
                 className="switch-input"
@@ -830,10 +844,10 @@ export default function Home() {
             {isGenerating
               ? "Generating Google Doc..."
               : !policyCheck.allowed
-              ? "Exceeds ESV Guidelines (Adjust Range)"
+              ? "Exceeds ESV guidelines (adjust range)"
               : user
-              ? "Create Formatted Google Doc"
-              : "Sign in with Google & Create Doc"}
+              ? "Create formatted Google Doc"
+              : "Sign in with Google & create doc"}
           </button>
         </div>
 
@@ -872,23 +886,46 @@ export default function Home() {
               <div className="doc-heading-preview">John 1</div>
             )}
 
+            {/* Section Heading Simulation */}
+            {options.sectionHeadings && (
+              <div className="doc-heading-preview">The Word Became Flesh</div>
+            )}
+
             {/* Sample Scripture Prose */}
             <p>
               {options.verseNumbers && (
-                <span className="doc-verse-num">1</span>
+                <>
+                  <span className="doc-verse-num">1</span>
+                  {"\u00A0"}
+                </>
               )}
               In the beginning was the Word, and the Word was with God, and the
               Word was God.{" "}
-              {options.verseNumbers && <span className="doc-verse-num">2</span>}
+              {options.verseNumbers && (
+                <>
+                  <span className="doc-verse-num">2</span>
+                  {"\u00A0"}
+                </>
+              )}
               He was in the beginning with God.{" "}
-              {options.verseNumbers && <span className="doc-verse-num">3</span>}
+              {options.verseNumbers && (
+                <>
+                  <span className="doc-verse-num">3</span>
+                  {"\u00A0"}
+                </>
+              )}
               All things were made through him, and without him was not any
               thing made that was made.
             </p>
 
             {/* Sample Poetry Indent */}
             <p className="doc-poetry-indent">
-              {options.verseNumbers && <span className="doc-verse-num">5</span>}
+              {options.verseNumbers && (
+                <>
+                  <span className="doc-verse-num">5</span>
+                  {"\u00A0"}
+                </>
+              )}
               The light shines in the darkness,
               <br />
               <span className="poetry-line-2">
@@ -974,7 +1011,7 @@ export default function Home() {
                     </div>
                   </div>
                   <a href={createdDoc.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                    Open Doc <ExternalLink size={14} />
+                    Open doc <ExternalLink size={14} />
                   </a>
                 </div>
               )}

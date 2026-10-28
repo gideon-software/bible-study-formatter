@@ -61,11 +61,12 @@ export function parseEsvHtml(
 
     // 1. Headings (h2, h3, h4)
     if (["h2", "h3", "h4"].includes(tagName)) {
-      if (options.chapterHeaders) {
+      if (options.sectionHeadings) {
         const text = $el.text().trim();
         if (text) {
           paragraphs.push({
             type: "heading",
+            isSectionHeading: true,
             alignment: "center",
             runs: [{ text, bold: true }],
           });
@@ -203,7 +204,7 @@ export async function fetchEsvChapter(
   const passageQuery = `${book.name} ${chapterNum}`;
   const params = new URLSearchParams({
     q: passageQuery,
-    "include-headings": String(options.chapterHeaders),
+    "include-headings": String(Boolean(options.sectionHeadings)),
     "include-footnotes": "false",
     "include-verse-numbers": String(options.verseNumbers),
     "include-short-copyright": "false",

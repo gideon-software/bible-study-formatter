@@ -75,4 +75,68 @@ describe("Google Docs Request Builder", () => {
     );
     assert(superReq, "Must include superscript request for verse numbers");
   });
+
+  it("emits insertPageBreak requests and keeps exact superscript indices across multiple chapters", () => {
+    const chapter2: ParsedChapter = {
+      bookId: "JHN",
+      bookName: "John",
+      chapterNum: 2,
+      paragraphs: [
+        {
+          type: "heading",
+          alignment: "center",
+          runs: [{ text: "John 2", bold: true }],
+        },
+        {
+          type: "paragraph",
+          runs: [
+            { text: "1\u00A0", superscript: true },
+            { text: "On the third day there was a wedding at Cana in Galilee. " },
+            { text: "2\u00A0", superscript: true },
+            { text: "Jesus also was invited to the wedding with his disciples." },
+          ],
+        },
+      ],
+    };
+
+    const requests = buildGoogleDocsRequests(
+      [sampleChapter, chapter2],
+      options,
+      "John 1-2 (ESV)",
+      "ESV"
+    );
+
+    const insertReq = requests.find((r) => r.insertText);
+    const fullText = insertReq?.insertText?.text || "";
+
+    // Must not contain raw form feed control character \u000C
+    assert.strictEqual(fullText.includes("\u000C"), false);
+
+    // Must emit 2 insertPageBreak requests (1 after title page, 1 before chapter 2) in reverse index order
+    const pageBreaks = requests.filter((r) => r.insertPageBreak);
+    assert.strictEqual(pageBreaks.length, 2);
+    const firstPbIdx = pageBreaks[0].insertPageBreak?.location?.index ?? 0;
+    const secondPbIdx = pageBreaks[1].insertPageBreak?.location?.index ?? 0;
+    assert(
+      firstPbIdx > secondPbIdx,
+      "Page breaks must be emitted in descending index order"
+    );
+
+    // Every SUPERSCRIPT range must slice to the exact verse number run in fullText
+    const superReqs = requests.filter(
+      (r) =>
+        r.updateTextStyle &&
+        r.updateTextStyle.textStyle?.baselineOffset === "SUPERSCRIPT"
+    );
+    assert.strictEqual(superReqs.length, 3); // Ch1 v1, Ch2 v1, Ch2 v2
+
+    const slicedSuperscripts = superReqs.map((r) => {
+      const start = (r.updateTextStyle?.range?.startIndex ?? 1) - 1;
+      const end = (r.updateTextStyle?.range?.endIndex ?? 1) - 1;
+      // The character immediately following the superscript range should be a regular-font \u00A0
+      assert.strictEqual(fullText[end], "\u00A0");
+      return fullText.slice(start, end);
+    });
+    assert.deepStrictEqual(slicedSuperscripts, ["1", "1", "2"]);
+  });
 });

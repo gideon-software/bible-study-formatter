@@ -69,11 +69,12 @@ export function parseNetVerses(
 
     // A. Psalm superscription / intro (<p class="psasuper">)
     if (className === "psasuper") {
-      if (options.chapterHeaders) {
+      if (options.sectionHeadings) {
         const text = $el.text().trim();
         if (text) {
           paragraphs.push({
             type: "heading",
+            isSectionHeading: true,
             alignment: "center",
             runs: [{ text, italic: true }],
           });
