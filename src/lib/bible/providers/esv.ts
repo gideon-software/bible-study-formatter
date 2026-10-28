@@ -52,8 +52,10 @@ export function parseEsvHtml(
     });
   }
 
-  // Iterate over paragraphs, line-groups, and headings in the ESV container
-  $(".esv > *").each((_, el) => {
+  // Iterate over paragraphs, line-groups, and headings in the ESV container or body
+  const $container = $(".esv").length > 0 ? $(".esv") : $("body");
+
+  $container.children().each((_, el) => {
     const $el = $(el);
     const tagName = el.tagName.toLowerCase();
 
@@ -137,12 +139,15 @@ function extractRuns(
       const elem = node as Element;
       const $node = $(elem);
 
-      // Handle Verse Numbers
-      if ($node.hasClass("verse-num")) {
+      // Handle Verse Numbers and Chapter Numbers
+      if ($node.hasClass("verse-num") || $node.hasClass("chapter-num")) {
         if (options.verseNumbers) {
           let verseText = $node.text().trim();
-          // If first verse and chapter headers are disabled, show "Chapter:Verse" (e.g. 1:1)
-          if (verseText === "1" && !options.chapterHeaders) {
+          // If first verse has chapter:verse e.g. "1:1"
+          if (verseText.includes(":")) {
+            const parts = verseText.split(":");
+            verseText = options.chapterHeaders ? parts[1].trim() : verseText;
+          } else if (verseText === "1" && !options.chapterHeaders) {
             verseText = `${chapterNum}:${verseText}`;
           }
           runs.push({

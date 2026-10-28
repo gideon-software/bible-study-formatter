@@ -76,4 +76,26 @@ describe("Crossway ESV HTML Parser", () => {
     const hasVerseNum = proseP.runs.some((r) => r.superscript);
     assert.strictEqual(hasVerseNum, false);
   });
+
+  it("correctly parses raw root-level ESV API HTML with chapter-num tag", () => {
+    const rawApiHtml = `
+      <h3>Greeting</h3>
+      <p class="starts-chapter"><b class="chapter-num">1:1&nbsp;</b>Paul, a servant of Christ Jesus, <b class="verse-num">2&nbsp;</b>which he promised beforehand.</p>
+    `;
+
+    const parsed = parseEsvHtml(rawApiHtml, "ROM", 1, defaultOptions);
+    assert.strictEqual(parsed.paragraphs.length, 3); // 1. "Romans 1", 2. "Greeting", 3. verse text
+
+    const verseP = parsed.paragraphs[2];
+    assert.strictEqual(verseP.type, "paragraph");
+    // Verse 1 should be parsed with superscript "1" (since chapterHeaders is true)
+    const verse1 = verseP.runs.find((r) => r.superscript && r.text.includes("1"));
+    assert(verse1, "Should extract verse 1 from chapter-num");
+    assert.strictEqual(verse1.text.trim(), "1");
+
+    // Verse 2
+    const verse2 = verseP.runs.find((r) => r.superscript && r.text.includes("2"));
+    assert(verse2, "Should extract verse 2");
+    assert(verseP.runs.some((r) => r.text.includes("Paul, a servant")));
+  });
 });
