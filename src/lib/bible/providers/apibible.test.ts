@@ -112,4 +112,60 @@ describe("API.Bible HTML Parser (CSB, NIV, NASB)", () => {
     // Closing parenthesis in v13 should not have a preceding space
     assert(p3Text.includes("(but was prevented until now)"));
   });
+
+  it("indents CSB NT poetic quotations (.qc with data-vid continuations) with 4/8 spaces and renders .qt in plain text", () => {
+    const rawCsbRom3 = `
+      <p class="m"><span data-number="9" data-sid="ROM 3:9" class="v">9</span>What then? <span data-number="10" data-sid="ROM 3:10" class="v">10</span>as it is written:</p>
+      <p data-vid="ROM 3:10" class="qc"><span class="qt">There is no one righteous, not even one.</span></p>
+      <p class="qc"><span data-number="11" data-sid="ROM 3:11" class="v">11</span><span class="qt">There is no one who understands;</span></p>
+      <p data-vid="ROM 3:11" class="qc"><span class="qt">there is no one who seeks God.</span></p>
+      <p class="qc"><span data-number="12" data-sid="ROM 3:12" class="v">12</span><span class="qt">All have turned away;</span></p>
+      <p data-vid="ROM 3:12" class="qc"><span class="qt">all alike have become worthless.</span></p>
+    `;
+
+    const parsed = parseApiBibleHtml(rawCsbRom3, "ROM", 3, defaultOptions);
+    const poetryPs = parsed.paragraphs.filter((p) => p.type === "poetry");
+    assert.strictEqual(poetryPs.length, 5);
+
+    // First line of quote after prose (v10) -> 4 spaces, plain text (not italic)
+    assert.strictEqual(poetryPs[0].indentSpaces, 4);
+    assert.strictEqual(poetryPs[0].runs[0].italic, undefined);
+
+    // First line of v11 -> 4 spaces, starts with superscript "11\u00A0"
+    assert.strictEqual(poetryPs[1].indentSpaces, 4);
+    assert.strictEqual(poetryPs[1].runs[0].superscript, true);
+    assert.strictEqual(poetryPs[1].runs[1].italic, undefined);
+
+    // Second line of v11 (data-vid="ROM 3:11") -> 8 spaces
+    assert.strictEqual(poetryPs[2].indentSpaces, 8);
+    assert.strictEqual(poetryPs[2].runs[0].text, "there is no one who seeks God.");
+
+    // First line of v12 -> 4 spaces; second line of v12 -> 8 spaces
+    assert.strictEqual(poetryPs[3].indentSpaces, 4);
+    assert.strictEqual(poetryPs[4].indentSpaces, 8);
+  });
+
+  it("indents CSB OT Psalms (.q1 primary and .q continuation with data-vid) with 4/8 spaces", () => {
+    const rawCsbPsa23 = `
+      <p class="d">A psalm of David.</p>
+      <p class="q1"><span data-number="1" data-sid="PSA 23:1" class="v">1</span>The <span class="nd">Lord</span> is my shepherd;</p>
+      <p data-vid="PSA 23:1" class="q">I have what I need.</p>
+    `;
+
+    const parsed = parseApiBibleHtml(rawCsbPsa23, "PSA", 23, defaultOptions);
+    // 1. "Psalms 23", 2. "A psalm of David." (italic), 3. q1 (4 spaces), 4. q (8 spaces)
+    assert.strictEqual(parsed.paragraphs.length, 4);
+    assert.strictEqual(parsed.paragraphs[1].type, "paragraph");
+    assert.strictEqual(parsed.paragraphs[1].runs[0].italic, true);
+
+    assert.strictEqual(parsed.paragraphs[2].type, "poetry");
+    assert.strictEqual(parsed.paragraphs[2].indentSpaces, 4);
+    assert.strictEqual(
+      parsed.paragraphs[2].runs.map((r) => r.text).join(""),
+      "1\u00A0The LORD is my shepherd;"
+    );
+
+    assert.strictEqual(parsed.paragraphs[3].type, "poetry");
+    assert.strictEqual(parsed.paragraphs[3].indentSpaces, 8);
+  });
 });

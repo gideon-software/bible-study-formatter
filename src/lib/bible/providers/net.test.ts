@@ -77,4 +77,76 @@ describe("NET Bible Parser (labs.bible.org)", () => {
     const hasVerseNum = proseP.runs.some((r) => r.superscript);
     assert.strictEqual(hasVerseNum, false);
   });
+
+  it("strips bold and italic from NET OT quotations (.otpoetry) and indents continuation lines by 8 spaces", () => {
+    const rom3NetVerses: NetApiVerse[] = [
+      {
+        bookname: "Romans",
+        chapter: "3",
+        verse: "10",
+        text: 'just as it is written: <p class="otpoetry">“<i><b>There is no one righteous, not even one;</b></i></p>',
+      },
+      {
+        bookname: "Romans",
+        chapter: "3",
+        verse: "11",
+        text: '<p class="otpoetry"><i><b>there is no one who understands;</b></i><p class="otpoetry"><i><b>there is no one who seeks God</b></i>. </p>',
+      },
+    ];
+
+    const parsed = parseNetVerses(rom3NetVerses, "ROM", 3, defaultOptions);
+    const poetryPs = parsed.paragraphs.filter((p) => p.type === "poetry");
+    assert.strictEqual(poetryPs.length, 3);
+
+    // v10 line 1 -> 4 spaces, neither bold nor italic
+    assert.strictEqual(poetryPs[0].indentSpaces, 4);
+    assert.strictEqual(
+      poetryPs[0].runs.some((r) => r.bold || r.italic),
+      false
+    );
+
+    // v11 line 1 -> 4 spaces, starts with superscript "11\u00A0", plain text
+    assert.strictEqual(poetryPs[1].indentSpaces, 4);
+    assert.strictEqual(poetryPs[1].runs[0].text, "11\u00A0");
+    assert.strictEqual(poetryPs[1].runs[0].superscript, true);
+    assert.strictEqual(
+      poetryPs[1].runs.some((r) => r.bold || r.italic),
+      false
+    );
+
+    // v11 line 2 -> 8 spaces, plain text
+    assert.strictEqual(poetryPs[2].indentSpaces, 8);
+    assert.strictEqual(
+      poetryPs[2].runs.map((r) => r.text).join(""),
+      "there is no one who seeks God."
+    );
+  });
+
+  it("preserves NET psasuper in italics without swallowing verse 1 and uppercases smcaps", () => {
+    const psa23NetVerses: NetApiVerse[] = [
+      {
+        bookname: "Psalms",
+        chapter: "23",
+        verse: "1",
+        text: '<p class="psasuper">A psalm of David.<p class="poetry">The <span class="smcaps">Lord</span> is my shepherd, <p class="poetry">I lack nothing. </p>',
+      },
+    ];
+
+    const parsed = parseNetVerses(psa23NetVerses, "PSA", 23, defaultOptions);
+    // 1. "Psalms 23", 2. "A psalm of David." (italic), 3. poetry line 1 (4 spaces), 4. poetry line 2 (8 spaces)
+    assert.strictEqual(parsed.paragraphs.length, 4);
+    assert.strictEqual(parsed.paragraphs[1].type, "paragraph");
+    assert.strictEqual(parsed.paragraphs[1].runs[0].text, "A psalm of David.");
+    assert.strictEqual(parsed.paragraphs[1].runs[0].italic, true);
+
+    assert.strictEqual(parsed.paragraphs[2].type, "poetry");
+    assert.strictEqual(parsed.paragraphs[2].indentSpaces, 4);
+    assert.strictEqual(
+      parsed.paragraphs[2].runs.map((r) => r.text).join(""),
+      "1\u00A0The LORD is my shepherd,"
+    );
+
+    assert.strictEqual(parsed.paragraphs[3].type, "poetry");
+    assert.strictEqual(parsed.paragraphs[3].indentSpaces, 8);
+  });
 });

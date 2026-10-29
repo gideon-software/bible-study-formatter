@@ -62,6 +62,7 @@ export function parseApiBibleHtml(
 
   // If there are top-level wrapper elements or direct paragraphs:
   const nodesToProcess = children.length > 0 ? children : $("p, h2, h3, h4, div");
+  let prevIsPoetry = false;
 
   nodesToProcess.each((_, el) => {
     const $el = $(el);
@@ -73,11 +74,25 @@ export function parseApiBibleHtml(
       return;
     }
 
+    // A0. Canonical Psalm Superscriptions (\d)
+    if (/\bd\b/.test(className)) {
+      prevIsPoetry = false;
+      const runs = extractRuns($, $el, options, chapterNum, { italic: true });
+      if (runs.length > 0) {
+        paragraphs.push({
+          type: "paragraph",
+          runs,
+        });
+      }
+      return;
+    }
+
     // A. Section Headings (\s, \s1, \s2, \ms, h2, h3, h4)
     if (
       ["h2", "h3", "h4"].includes(tagName) ||
       /\b(s[1-4]?|ms[1-4]?|r|mr)\b/.test(className)
     ) {
+      prevIsPoetry = false;
       if (options.sectionHeadings) {
         const text = $el.text().trim();
         if (text) {
@@ -92,9 +107,14 @@ export function parseApiBibleHtml(
       return;
     }
 
-    // B. Poetry Line Groups (\q, \q1, \q2, \q3, \q4, \qc, \qr)
-    if (/\bq[1-4]?\b/.test(className)) {
-      const isDeeperIndent = /\bq[2-4]\b/.test(className);
+    // B. Poetry Line Groups (\q, \q1, \q2, \q3, \q4, \qc, \qr, \qm, \qd)
+    if (/\b(q[1-4]?|qc|qr|qm[1-4]?|qd)\b/.test(className)) {
+      const isExplicitDeeper = /\b(q[2-4]|qm[2-4])\b/.test(className);
+      const isExplicitPrimary = /\b(q1|qm1)\b/.test(className);
+      const isContinuationLine =
+        !isExplicitPrimary && prevIsPoetry && Boolean($el.attr("data-vid"));
+      const isDeeperIndent = isExplicitDeeper || isContinuationLine;
+
       const runs = extractRuns($, $el, options, chapterNum);
       if (runs.length > 0) {
         paragraphs.push({
@@ -102,6 +122,7 @@ export function parseApiBibleHtml(
           indentSpaces: isDeeperIndent ? 8 : 4,
           runs,
         });
+        prevIsPoetry = true;
       }
       return;
     }
@@ -109,11 +130,13 @@ export function parseApiBibleHtml(
     // C. Poetry Stanza Break (\b)
     if ($el.hasClass("b")) {
       // Line break / stanza spacing
+      prevIsPoetry = false;
       return;
     }
 
     // D. Standard Prose Paragraphs (\p, \m, \pi, \nb, or generic <p> / <div>)
     if (tagName === "p" || tagName === "div" || /\b(p|m|pi|nb)\b/.test(className)) {
+      prevIsPoetry = false;
       const runs = extractRuns($, $el, options, chapterNum);
       if (runs.length > 0) {
         paragraphs.push({
@@ -140,7 +163,8 @@ function extractRuns(
   $: cheerio.CheerioAPI,
   $parent: cheerio.Cheerio<AnyNode>,
   options: FormatOptions,
-  chapterNum: number
+  chapterNum: number,
+  initialStyle: { bold?: boolean; italic?: boolean; uppercase?: boolean } = {}
 ): TextRun[] {
   const runs: TextRun[] = [];
 
@@ -193,6 +217,7 @@ function extractRuns(
       }
 
       // 3. Styling markers (bold, italic, translator additions, divine name / small caps)
+      // Note: .qt (OT quotations in NT) is intentionally rendered in regular roman text (Option 1)
       const isBold =
         currentStyle.bold ||
         elem.name === "b" ||
@@ -203,7 +228,7 @@ function extractRuns(
         currentStyle.italic ||
         elem.name === "i" ||
         elem.name === "em" ||
-        /\b(it|add|bk|qt)\b/.test(className);
+        /\b(it|add|bk|qs)\b/.test(className);
 
       const isUppercase =
         currentStyle.uppercase || /\b(nd|sc)\b/.test(className);
@@ -219,7 +244,7 @@ function extractRuns(
   }
 
   $parent.contents().each((_, child) => {
-    traverse(child, {});
+    traverse(child, initialStyle);
   });
 
   return normalizeParagraphRuns(runs);

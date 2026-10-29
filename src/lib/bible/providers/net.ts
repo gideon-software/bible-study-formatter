@@ -6,6 +6,7 @@ import {
   ParsedChapter,
   TextRun,
   getBookById,
+  normalizeParagraphRuns,
 } from "../books";
 
 export interface NetApiVerse {
@@ -41,14 +42,36 @@ export function parseNetVerses(
     });
   }
 
-  // Build combined HTML with verse numbers injected
+  // Build combined HTML with verse numbers injected and continuation poetry lines marked
   let combinedHtml = "";
   for (const v of verses) {
     let t = v.text || "";
     const vSpan = `<span class="v" data-number="${v.verse}">${v.verse}</span> `;
 
-    // If verse starts with a paragraph tag like <p class="bodytext"> or <p class="poetry">
-    if (t.trim().startsWith("<p")) {
+    // Mark 2nd+ poetic <p> tags within the same verse as continuation lines (8-space indent)
+    let poetryCountInVerse = 0;
+    t = t.replace(/<p\s+class="([^"]*poetry[^"]*)"\s*>/gi, (match, cls) => {
+      poetryCountInVerse++;
+      if (poetryCountInVerse > 1) {
+        return `<p class="${cls}" data-continuation="true">`;
+      }
+      return match;
+    });
+
+    // If verse starts with a Psalm superscription (<p class="psasuper">), inject verse number into the following <p>
+    const trimmed = t.trim();
+    if (/^<p\s+class="psasuper"/i.test(trimmed)) {
+      const firstClose = t.indexOf(">");
+      const nextP = t.indexOf("<p", firstClose + 1);
+      if (nextP !== -1) {
+        const nextClose = t.indexOf(">", nextP);
+        if (nextClose !== -1) {
+          t = t.slice(0, nextClose + 1) + vSpan + t.slice(nextClose + 1);
+        }
+      } else {
+        t = t.slice(0, firstClose + 1) + vSpan + t.slice(firstClose + 1);
+      }
+    } else if (trimmed.startsWith("<p")) {
       const closeIdx = t.indexOf(">");
       t = t.slice(0, closeIdx + 1) + vSpan + t.slice(closeIdx + 1);
     } else {
@@ -67,29 +90,26 @@ export function parseNetVerses(
     const $el = $(el);
     const className = $el.attr("class") || "";
 
-    // A. Psalm superscription / intro (<p class="psasuper">)
+    // A. Canonical Psalm superscription (<p class="psasuper">)
     if (className === "psasuper") {
-      if (options.sectionHeadings) {
-        const text = $el.text().trim();
-        if (text) {
-          paragraphs.push({
-            type: "heading",
-            isSectionHeading: true,
-            alignment: "center",
-            runs: [{ text, italic: true }],
-          });
-        }
+      const runs = extractRuns($, $el, options, chapterNum, { italic: true });
+      if (runs.length > 0) {
+        paragraphs.push({
+          type: "paragraph",
+          runs,
+        });
       }
       return;
     }
 
-    // B. Poetry (<p class="poetry">)
+    // B. Poetry (<p class="poetry"> or <p class="otpoetry">)
     if (className.includes("poetry")) {
+      const isContinuation = $el.attr("data-continuation") === "true";
       const runs = extractRuns($, $el, options, chapterNum);
       if (runs.length > 0) {
         paragraphs.push({
           type: "poetry",
-          indentSpaces: 4,
+          indentSpaces: isContinuation ? 8 : 4,
           runs,
         });
       }
@@ -132,17 +152,25 @@ function extractRuns(
   $: cheerio.CheerioAPI,
   $parent: cheerio.Cheerio<AnyNode>,
   options: FormatOptions,
-  chapterNum: number
+  chapterNum: number,
+  initialStyle: { bold?: boolean; italic?: boolean; uppercase?: boolean } = {}
 ): TextRun[] {
   const runs: TextRun[] = [];
 
-  function traverse(node: AnyNode, currentStyle: { bold?: boolean; italic?: boolean }) {
+  function traverse(
+    node: AnyNode,
+    currentStyle: { bold?: boolean; italic?: boolean; uppercase?: boolean }
+  ) {
     if (node.type === "text") {
-      const text = (node as { data?: string }).data;
+      let text = (node as { data?: string }).data;
       if (text) {
+        if (currentStyle.uppercase) {
+          text = text.toUpperCase();
+        }
         runs.push({
           text,
-          ...currentStyle,
+          ...(currentStyle.bold ? { bold: true } : {}),
+          ...(currentStyle.italic ? { italic: true } : {}),
         });
       }
       return;
@@ -178,27 +206,26 @@ function extractRuns(
       }
 
       // 3. Styling markers
-      const isBold =
-        currentStyle.bold ||
-        elem.name === "b" ||
-        elem.name === "strong";
-
-      const isItalic =
-        currentStyle.italic ||
-        elem.name === "i" ||
-        elem.name === "em";
+      // Note: NET wraps Old Testament quotations in <b><i>...</i></b>; we keep those in
+      // plain roman text (Option 1) while uppercasing .smcaps (Lord -> LORD)
+      const isUppercase =
+        currentStyle.uppercase || /\bsmcaps\b/.test(className);
 
       elem.children?.forEach((child) => {
-        traverse(child, { bold: isBold, italic: isItalic });
+        traverse(child, {
+          bold: currentStyle.bold,
+          italic: currentStyle.italic,
+          uppercase: isUppercase,
+        });
       });
     }
   }
 
   $parent.contents().each((_, child) => {
-    traverse(child, {});
+    traverse(child, initialStyle);
   });
 
-  return runs;
+  return normalizeParagraphRuns(runs);
 }
 
 /**
