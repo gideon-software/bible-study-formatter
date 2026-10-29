@@ -194,3 +194,52 @@ export function parseUrlSettings(search: string | URLSearchParams): ParsedUrlSet
 
   return result;
 }
+
+/**
+ * Builds a shareable BSF URL that reproduces a specific Bible passage and formatting options.
+ */
+export function buildShareableUrl(params: {
+  baseUrl: string;
+  versionId: string;
+  bookId: string;
+  chapterStart: number;
+  chapterEnd: number;
+  options?: Partial<FormatOptions> | null;
+}): string {
+  const searchParams = new URLSearchParams();
+  searchParams.set("v", params.versionId);
+  searchParams.set("book", params.bookId);
+  searchParams.set("start", String(params.chapterStart));
+  searchParams.set("end", String(params.chapterEnd));
+
+  const opt = params.options;
+  if (opt) {
+    if (opt.chapterHeaders !== undefined) {
+      searchParams.set("headers", opt.chapterHeaders ? "1" : "0");
+    }
+    if (opt.chapterPageBreaks !== undefined) {
+      searchParams.set("breaks", opt.chapterPageBreaks ? "1" : "0");
+    }
+    if (opt.verseNumbers !== undefined) {
+      searchParams.set("verses", opt.verseNumbers ? "1" : "0");
+    }
+    if (opt.sectionHeadings !== undefined) {
+      searchParams.set("sections", opt.sectionHeadings ? "1" : "0");
+    }
+    if (opt.titlePage !== undefined) {
+      searchParams.set("title", opt.titlePage ? "1" : "0");
+    }
+    if (opt.fontName) {
+      searchParams.set("font", opt.fontName);
+    }
+    if (opt.fontSize !== undefined) {
+      searchParams.set("size", String(opt.fontSize));
+    }
+    if (opt.lineSpacing !== undefined) {
+      searchParams.set("spacing", String(opt.lineSpacing));
+    }
+  }
+
+  const cleanBase = params.baseUrl.replace(/\/$/, "");
+  return `${cleanBase}/?${searchParams.toString()}`;
+}

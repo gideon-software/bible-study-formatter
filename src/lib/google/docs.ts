@@ -352,3 +352,86 @@ export async function createGoogleDocWithAuth(
     docName: docTitle,
   };
 }
+
+/**
+ * Formats a timestamp suffix for disambiguating older duplicate Google Docs in Drive,
+ * e.g. "[Oct 29 @ 6:12am]".
+ */
+export function formatDriveTimestampSuffix(
+  date: Date,
+  timeZone?: string
+): string {
+  const formatWithTz = (tz?: string) => {
+    const tzOpt = tz ? { timeZone: tz } : {};
+    const monthDay = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      ...tzOpt,
+    }).format(date);
+    const timeStr = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      ...tzOpt,
+    })
+      .format(date)
+      .replace(/\s+/g, "")
+      .toLowerCase();
+    return `[${monthDay} @ ${timeStr}]`;
+  };
+
+  try {
+    return formatWithTz(timeZone);
+  } catch {
+    return formatWithTz(undefined);
+  }
+}
+
+/**
+ * Renames a file created by BSF in the user's Google Drive.
+ */
+export async function renameGoogleDriveFile(
+  authInput: InstanceType<typeof google.auth.OAuth2> | string,
+  fileId: string,
+  newName: string
+): Promise<void> {
+  let auth: InstanceType<typeof google.auth.OAuth2>;
+  if (typeof authInput === "string") {
+    auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: authInput });
+  } else {
+    auth = authInput;
+  }
+
+  const drive = google.drive({ version: "v3", auth });
+  await drive.files.update({
+    fileId,
+    requestBody: {
+      name: newName,
+    },
+  });
+}
+
+/**
+ * Moves a file created by BSF into the user's Google Drive Trash (recoverable for 30 days).
+ */
+export async function trashGoogleDriveFile(
+  authInput: InstanceType<typeof google.auth.OAuth2> | string,
+  fileId: string
+): Promise<void> {
+  let auth: InstanceType<typeof google.auth.OAuth2>;
+  if (typeof authInput === "string") {
+    auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: authInput });
+  } else {
+    auth = authInput;
+  }
+
+  const drive = google.drive({ version: "v3", auth });
+  await drive.files.update({
+    fileId,
+    requestBody: {
+      trashed: true,
+    },
+  });
+}

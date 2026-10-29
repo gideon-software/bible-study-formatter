@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { LogOut, ShieldCheck } from "lucide-react";
+import { LogOut, ShieldCheck, History } from "lucide-react";
 
 interface UserDropdownProps {
   user: {
@@ -10,10 +10,18 @@ interface UserDropdownProps {
     picture?: string;
   };
   isAdmin?: boolean;
+  historyCount?: number;
+  onOpenHistory?: () => void;
   onLogout: () => void;
 }
 
-export function UserDropdown({ user, isAdmin = false, onLogout }: UserDropdownProps) {
+export function UserDropdown({
+  user,
+  isAdmin = false,
+  historyCount = 0,
+  onOpenHistory,
+  onLogout,
+}: UserDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,6 +94,27 @@ export function UserDropdown({ user, isAdmin = false, onLogout }: UserDropdownPr
           </div>
 
           <div className="user-dropdown-divider" />
+
+          {onOpenHistory && (
+            <>
+              <button
+                type="button"
+                className="user-dropdown-item"
+                role="menuitem"
+                onClick={() => {
+                  setIsOpen(false);
+                  onOpenHistory();
+                }}
+              >
+                <History size={16} />
+                <span style={{ flex: 1, textAlign: "left" }}>Document history</span>
+                {historyCount > 0 && (
+                  <span className="user-dropdown-badge">{historyCount}</span>
+                )}
+              </button>
+              <div className="user-dropdown-divider" />
+            </>
+          )}
 
           {isAdmin && (
             <>

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { buildGoogleDocsRequests } from "./docs";
+import { buildGoogleDocsRequests, formatDriveTimestampSuffix } from "./docs";
 import { FormatOptions, ParsedChapter } from "../bible/books";
 
 describe("Google Docs Request Builder", () => {
@@ -138,5 +138,11 @@ describe("Google Docs Request Builder", () => {
       return fullText.slice(start, end);
     });
     assert.deepStrictEqual(slicedSuperscripts, ["1", "1", "2"]);
+  });
+
+  it("formats Google Drive duplicate timestamp suffix as [Oct 29 @ 6:12am]", () => {
+    const sampleDate = new Date("2026-10-29T10:12:00.000Z");
+    const formatted = formatDriveTimestampSuffix(sampleDate, "America/New_York");
+    assert.strictEqual(formatted, "[Oct 29 @ 6:12am]");
   });
 });

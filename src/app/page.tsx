@@ -21,11 +21,123 @@ import {
   BookmarkCheck,
   RotateCcw,
   Check,
+  Link2,
+  X,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GoogleLogo } from "@/components/GoogleLogo";
 import { UserDropdown } from "@/components/UserDropdown";
-import { parseUrlSettings } from "@/lib/bible/urlParams";
+import { parseUrlSettings, buildShareableUrl } from "@/lib/bible/urlParams";
+
+interface DocHistoryItem {
+  id?: number;
+  docId: string | null;
+  docUrl: string | null;
+  docName: string;
+  versionAbbr: string;
+  bookId: string;
+  bookName?: string;
+  chapterStart: number;
+  chapterEnd: number;
+  options?: Partial<FormatOptions> | null;
+  createdAt: string;
+}
+
+function getPassageGroupKey(item: {
+  bookId: string;
+  chapterStart: number;
+  chapterEnd: number;
+  versionAbbr: string;
+}): string {
+  return `${item.bookId.toUpperCase()}:${item.chapterStart}-${item.chapterEnd}:${item.versionAbbr.toUpperCase()}`;
+}
+
+function formatRelativeDocDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  if (isNaN(date.getTime())) return "";
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round(
+    (startOfToday.getTime() - startOfTarget.getTime()) / (1000 * 60 * 60 * 24)
+  );
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
+function formatDocTimestamp(isoDate: string): string {
+  const date = new Date(isoDate);
+  if (isNaN(date.getTime())) return "";
+  const monthDay = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+  const timeStr = date
+    .toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .replace(/\s+/g, "")
+    .toLowerCase();
+  return `${monthDay} @ ${timeStr}`;
+}
+
+function describeOptionsDiff(
+  itemOpts?: Partial<FormatOptions> | null,
+  refOpts?: Partial<FormatOptions> | null
+): string | null {
+  if (!itemOpts || !refOpts) return null;
+  const diffs: string[] = [];
+
+  if (Boolean(itemOpts.chapterHeaders ?? true) !== Boolean(refOpts.chapterHeaders ?? true)) {
+    diffs.push(itemOpts.chapterHeaders ? "Chapter headers on" : "No chapter headers");
+  }
+  if (Boolean(itemOpts.chapterPageBreaks ?? true) !== Boolean(refOpts.chapterPageBreaks ?? true)) {
+    diffs.push(itemOpts.chapterPageBreaks ? "Page breaks on" : "No page breaks");
+  }
+  if (Boolean(itemOpts.verseNumbers ?? true) !== Boolean(refOpts.verseNumbers ?? true)) {
+    diffs.push(itemOpts.verseNumbers ? "Verse numbers on" : "No verse numbers");
+  }
+  if (Boolean(itemOpts.sectionHeadings ?? false) !== Boolean(refOpts.sectionHeadings ?? false)) {
+    diffs.push(itemOpts.sectionHeadings ? "Section headings on" : "No section headings");
+  }
+  if (Boolean(itemOpts.titlePage ?? false) !== Boolean(refOpts.titlePage ?? false)) {
+    diffs.push(itemOpts.titlePage ? "Title page on" : "No title page");
+  }
+  if (
+    itemOpts.fontName &&
+    refOpts.fontName &&
+    itemOpts.fontName !== refOpts.fontName
+  ) {
+    diffs.push(itemOpts.fontName);
+  }
+  if (
+    itemOpts.fontSize !== undefined &&
+    refOpts.fontSize !== undefined &&
+    itemOpts.fontSize !== refOpts.fontSize
+  ) {
+    diffs.push(`${itemOpts.fontSize}pt`);
+  }
+  if (
+    itemOpts.lineSpacing !== undefined &&
+    refOpts.lineSpacing !== undefined &&
+    itemOpts.lineSpacing !== refOpts.lineSpacing
+  ) {
+    diffs.push(`${itemOpts.lineSpacing}x spacing`);
+  }
+
+  return diffs.length > 0 ? diffs.join(" • ") : null;
+}
 
 const FONT_FAMILY_MAP: Record<string, string> = {
   Arial: "Arial, Helvetica, sans-serif",
@@ -76,11 +188,25 @@ export default function Home() {
   const [versionSavedNotice, setVersionSavedNotice] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Generation status
+  // Generation status & document history
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
-  const [createdDoc, setCreatedDoc] = useState<{ id: string; url: string; name: string } | null>(null);
+  const [createdDoc, setCreatedDoc] = useState<{
+    id: string;
+    url: string;
+    name: string;
+    versionAbbr: string;
+    bookId: string;
+    chapterStart: number;
+    chapterEnd: number;
+    options: FormatOptions;
+  } | null>(null);
+  const [userHistory, setUserHistory] = useState<DocHistoryItem[]>([]);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [trashingKeys, setTrashingKeys] = useState<Record<string, boolean>>({});
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
@@ -221,10 +347,20 @@ export default function Home() {
           setUser(authData.user);
           setIsAdmin(!!authData.isAdmin);
 
-          // Fetch DB preferences for authenticated user
-          const prefRes = await fetch("/api/user/preferences");
-          const prefData = await prefRes.json();
+          // Fetch DB preferences & recent history for authenticated user
+          const [prefRes, histRes] = await Promise.all([
+            fetch("/api/user/preferences"),
+            fetch("/api/user/history"),
+          ]);
+          const [prefData, histData] = await Promise.all([
+            prefRes.json(),
+            histRes.json(),
+          ]);
           if (!isMounted) return;
+
+          if (Array.isArray(histData.history)) {
+            setUserHistory(histData.history);
+          }
 
           if (prefData.preferences) {
             const dbPref = prefData.preferences;
@@ -446,6 +582,7 @@ export default function Home() {
       setStatusMessage("Fetching Scripture and applying typography rules...");
       setProgress(40);
 
+      const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -455,6 +592,7 @@ export default function Home() {
           chapterEnd,
           version: versionId,
           options,
+          timeZone: userTimeZone,
         }),
       });
 
@@ -475,12 +613,32 @@ export default function Home() {
       }
 
       setProgress(100);
-      setStatusMessage("Document created successfully in your Google Drive!");
-      setCreatedDoc({
+      setStatusMessage("");
+      const newDocSnapshot = {
         id: result.docId,
         url: result.docUrl,
         name: result.docName,
-      });
+        versionAbbr: versionId,
+        bookId,
+        chapterStart,
+        chapterEnd,
+        options: { ...options },
+      };
+      setCreatedDoc(newDocSnapshot);
+      setUserHistory((prev) => [
+        {
+          docId: result.docId,
+          docUrl: result.docUrl,
+          docName: result.docName,
+          versionAbbr: versionId,
+          bookId,
+          chapterStart,
+          chapterEnd,
+          options: { ...options },
+          createdAt: new Date().toISOString(),
+        },
+        ...prev.filter((item) => item.docId !== result.docId),
+      ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to create document.";
       setErrorMsg(msg);
@@ -489,6 +647,132 @@ export default function Home() {
       setIsGenerating(false);
     }
   };
+
+  // Copy shareable BSF URL for a generated or historical doc
+  const handleCopyBsfLink = async (
+    key: string,
+    itemVersion: string,
+    itemBookId: string,
+    itemStart: number,
+    itemEnd: number,
+    itemOptions?: Partial<FormatOptions> | null
+  ) => {
+    try {
+      const url = buildShareableUrl({
+        baseUrl: window.location.origin,
+        versionId: itemVersion,
+        bookId: itemBookId,
+        chapterStart: itemStart,
+        chapterEnd: itemEnd,
+        options: itemOptions,
+      });
+      await navigator.clipboard.writeText(url);
+      setCopiedKey(key);
+      setTimeout(() => {
+        setCopiedKey((prev) => (prev === key ? null : prev));
+      }, 1600);
+    } catch (e) {
+      console.error("Failed to copy BSF link:", e);
+    }
+  };
+
+  // Close history modal on Escape key
+  useEffect(() => {
+    if (!isHistoryModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsHistoryModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isHistoryModalOpen]);
+
+  // Toggle expanded state for a passage group's earlier runs
+  const toggleGroupExpanded = (groupKey: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupKey]: !prev[groupKey],
+    }));
+  };
+
+  // Move one or more documents to Google Drive Trash and remove from history
+  const handleTrashDocs = async (actionKey: string, docIds: string[]) => {
+    const validIds = docIds.filter(Boolean);
+    if (validIds.length === 0) return;
+
+    setTrashingKeys((prev) => ({ ...prev, [actionKey]: true }));
+    try {
+      const res = await fetch("/api/user/history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docIds: validIds }),
+      });
+      if (res.ok) {
+        const trashedSet = new Set(validIds);
+        setUserHistory((prev) =>
+          prev.filter((item) => !item.docId || !trashedSet.has(item.docId))
+        );
+        if (createdDoc && trashedSet.has(createdDoc.id)) {
+          setCreatedDoc(null);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to move doc(s) to Google Drive trash:", e);
+    } finally {
+      setTrashingKeys((prev) => {
+        const next = { ...prev };
+        delete next[actionKey];
+        return next;
+      });
+    }
+  };
+
+  // Group history by passage + version so trial runs collapse under the latest doc
+  const groupedRecentDocs = useMemo(() => {
+    const groupsMap = new Map<
+      string,
+      {
+        groupKey: string;
+        latest: DocHistoryItem;
+        earlier: DocHistoryItem[];
+      }
+    >();
+
+    for (const item of userHistory) {
+      const key = getPassageGroupKey(item);
+      const existing = groupsMap.get(key);
+      if (!existing) {
+        groupsMap.set(key, {
+          groupKey: key,
+          latest: item,
+          earlier: [],
+        });
+      } else {
+        existing.earlier.push(item);
+      }
+    }
+
+    return Array.from(groupsMap.values()).slice(0, 5);
+  }, [userHistory]);
+
+  // Set of docIds that represent the latest run of each passage (older runs have bracketed timestamps in Drive)
+  const latestDocIdByPassage = useMemo(() => {
+    const seenPassages = new Set<string>();
+    const latestDocIds = new Set<string>();
+    const latestOptionsByPassage = new Map<string, Partial<FormatOptions> | null | undefined>();
+
+    for (const item of userHistory) {
+      const key = getPassageGroupKey(item);
+      if (!seenPassages.has(key)) {
+        seenPassages.add(key);
+        if (item.docId) latestDocIds.add(item.docId);
+        latestOptionsByPassage.set(key, item.options);
+      }
+    }
+
+    return { latestDocIds, latestOptionsByPassage };
+  }, [userHistory]);
 
   return (
     <div className="container">
@@ -514,10 +798,14 @@ export default function Home() {
             <UserDropdown
               user={user}
               isAdmin={isAdmin}
+              historyCount={userHistory.length}
+              onOpenHistory={() => setIsHistoryModalOpen(true)}
               onLogout={async () => {
                 await fetch("/api/auth/google/logout", { method: "POST" });
                 setUser(null);
                 setIsAdmin(false);
+                setUserHistory([]);
+                setCreatedDoc(null);
               }}
             />
           ) : (
@@ -934,8 +1222,8 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Generation Progress & Status */}
-          {(isGenerating || progress !== null || errorMsg || createdDoc) && (
+          {/* Generation Progress & Errors */}
+          {(isGenerating || errorMsg) && (
             <div className="generation-status">
               {statusMessage && (
                 <div className="status-indicator">
@@ -999,26 +1287,383 @@ export default function Home() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
 
-              {createdDoc && (
-                <div className="doc-link-card">
-                  <div>
-                    <div className="doc-link-name">
-                      {createdDoc.name}
-                    </div>
-                    <div className="doc-link-desc">
-                      Saved directly in your Google Drive
-                    </div>
-                  </div>
-                  <a href={createdDoc.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                    Open doc <ExternalLink size={14} />
-                  </a>
+          {/* Recent Google Docs Section */}
+          {groupedRecentDocs.length > 0 && (
+            <div className="recent-docs-section">
+              <div className="recent-docs-header">
+                <div className="recent-docs-title">
+                  <span>Recent Google Docs</span>
+                  <span className="recent-docs-subtitle">(last 5)</span>
                 </div>
-              )}
+                {userHistory.length > 0 && (
+                  <button
+                    type="button"
+                    className="recent-docs-view-all"
+                    onClick={() => setIsHistoryModalOpen(true)}
+                  >
+                    View all ({userHistory.length}) →
+                  </button>
+                )}
+              </div>
+
+              <div className="recent-docs-list">
+                {groupedRecentDocs.map((group, idx) => {
+                  const item = group.latest;
+                  const isJustCreated =
+                    createdDoc !== null && item.docId === createdDoc.id;
+                  const rowKey = `recent-${item.docId || item.id || idx}`;
+                  const isExpanded = Boolean(expandedGroups[group.groupKey]);
+                  const earlierDocIds = group.earlier
+                    .map((e) => e.docId)
+                    .filter((id): id is string => Boolean(id));
+
+                  return (
+                    <div key={group.groupKey} className="doc-history-group">
+                      <div
+                        className={`doc-history-row ${
+                          isJustCreated ? "just-created" : ""
+                        }`}
+                      >
+                        <div className="doc-history-info">
+                          <div className="doc-history-title-row">
+                            {item.docUrl ? (
+                              <a
+                                href={item.docUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="doc-history-link"
+                              >
+                                {item.docName} <ExternalLink size={13} />
+                              </a>
+                            ) : (
+                              <span className="doc-history-link">{item.docName}</span>
+                            )}
+                            {isJustCreated && (
+                              <span className="doc-just-created-badge">
+                                Just created
+                              </span>
+                            )}
+                          </div>
+                          <div className="doc-history-meta-row">
+                            <span className="doc-history-meta">
+                              {isJustCreated
+                                ? "Saved in Google Drive"
+                                : formatRelativeDocDate(item.createdAt)}
+                            </span>
+                            {group.earlier.length > 0 && (
+                              <button
+                                type="button"
+                                className="btn-earlier-toggle"
+                                onClick={() => toggleGroupExpanded(group.groupKey)}
+                              >
+                                • {group.earlier.length} earlier{" "}
+                                {isExpanded ? (
+                                  <ChevronUp size={12} />
+                                ) : (
+                                  <ChevronDown size={12} />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="doc-history-actions">
+                          <button
+                            type="button"
+                            className={`btn-copy-link ${
+                              copiedKey === rowKey ? "copied" : ""
+                            }`}
+                            onClick={() =>
+                              handleCopyBsfLink(
+                                rowKey,
+                                item.versionAbbr,
+                                item.bookId,
+                                item.chapterStart,
+                                item.chapterEnd,
+                                item.options
+                              )
+                            }
+                            title="Copy a BSF link pre-filled with this passage and formatting"
+                          >
+                            {copiedKey === rowKey ? (
+                              <>
+                                <Check size={13} /> Copied URL
+                              </>
+                            ) : (
+                              <>
+                                <Link2 size={13} /> Copy BSF link
+                              </>
+                            )}
+                          </button>
+
+                          {item.docId && (
+                            <button
+                              type="button"
+                              className="btn-trash-doc"
+                              disabled={Boolean(trashingKeys[rowKey])}
+                              onClick={() =>
+                                handleTrashDocs(rowKey, [item.docId!])
+                              }
+                              title="Move to Google Drive trash"
+                              aria-label="Move to Google Drive trash"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {isExpanded && group.earlier.length > 0 && (
+                        <div className="earlier-runs-container">
+                          {earlierDocIds.length > 1 && (
+                            <div className="earlier-runs-toolbar">
+                              <span className="doc-history-meta">
+                                Earlier versions in Google Drive
+                              </span>
+                              <button
+                                type="button"
+                                className="btn-trash-all-earlier"
+                                disabled={Boolean(
+                                  trashingKeys[`all-${group.groupKey}`]
+                                )}
+                                onClick={() =>
+                                  handleTrashDocs(
+                                    `all-${group.groupKey}`,
+                                    earlierDocIds
+                                  )
+                                }
+                                title="Move all earlier versions of this passage to Google Drive trash"
+                              >
+                                <Trash2 size={12} />
+                                {trashingKeys[`all-${group.groupKey}`]
+                                  ? "Moving to trash..."
+                                  : `Trash all ${earlierDocIds.length} earlier`}
+                              </button>
+                            </div>
+                          )}
+
+                          {group.earlier.map((earlierItem, eIdx) => {
+                            const earlierKey = `earlier-${
+                              earlierItem.docId || earlierItem.id || eIdx
+                            }`;
+                            const timestampLabel = formatDocTimestamp(
+                              earlierItem.createdAt
+                            );
+                            const diffText = describeOptionsDiff(
+                              earlierItem.options,
+                              item.options
+                            );
+
+                            return (
+                              <div
+                                key={earlierKey}
+                                className="doc-history-row earlier-run-row"
+                              >
+                                <div className="doc-history-info">
+                                  <div className="doc-history-title-row">
+                                    {earlierItem.docUrl ? (
+                                      <a
+                                        href={earlierItem.docUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="doc-history-link earlier-link"
+                                      >
+                                        {timestampLabel} <ExternalLink size={12} />
+                                      </a>
+                                    ) : (
+                                      <span className="doc-history-link earlier-link">
+                                        {timestampLabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {diffText && (
+                                    <div className="doc-history-diff">
+                                      {diffText}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="doc-history-actions">
+                                  <button
+                                    type="button"
+                                    className={`btn-copy-link ${
+                                      copiedKey === earlierKey ? "copied" : ""
+                                    }`}
+                                    onClick={() =>
+                                      handleCopyBsfLink(
+                                        earlierKey,
+                                        earlierItem.versionAbbr,
+                                        earlierItem.bookId,
+                                        earlierItem.chapterStart,
+                                        earlierItem.chapterEnd,
+                                        earlierItem.options
+                                      )
+                                    }
+                                    title="Copy a BSF link pre-filled with this passage and formatting"
+                                  >
+                                    {copiedKey === earlierKey ? (
+                                      <>
+                                        <Check size={13} /> Copied URL
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Link2 size={13} /> Copy BSF link
+                                      </>
+                                    )}
+                                  </button>
+
+                                  {earlierItem.docId && (
+                                    <button
+                                      type="button"
+                                      className="btn-trash-doc"
+                                      disabled={Boolean(trashingKeys[earlierKey])}
+                                      onClick={() =>
+                                        handleTrashDocs(earlierKey, [
+                                          earlierItem.docId!,
+                                        ])
+                                      }
+                                      title="Move to Google Drive trash"
+                                      aria-label="Move to Google Drive trash"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Document History Modal */}
+      {isHistoryModalOpen && (
+        <div
+          className="history-modal-backdrop"
+          onClick={() => setIsHistoryModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="history-modal-title"
+        >
+          <div
+            className="history-modal-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="history-modal-header">
+              <h3 id="history-modal-title" className="history-modal-title">
+                Your Document History ({userHistory.length})
+              </h3>
+              <button
+                type="button"
+                className="history-modal-close"
+                onClick={() => setIsHistoryModalOpen(false)}
+              >
+                <X size={14} /> Close
+              </button>
+            </div>
+            <div className="history-modal-body">
+              {userHistory.length === 0 ? (
+                <div className="doc-history-meta" style={{ padding: "1rem 0", textAlign: "center" }}>
+                  No documents generated yet.
+                </div>
+              ) : (
+                userHistory.map((item, idx) => {
+                  const modalKey = `modal-${item.docId || item.id || idx}`;
+                  const passageKey = getPassageGroupKey(item);
+                  const isLatestForPassage =
+                    item.docId !== null &&
+                    latestDocIdByPassage.latestDocIds.has(item.docId);
+                  const diffText = !isLatestForPassage
+                    ? describeOptionsDiff(
+                        item.options,
+                        latestDocIdByPassage.latestOptionsByPassage.get(passageKey)
+                      )
+                    : null;
+                  const metaLine = isLatestForPassage
+                    ? formatRelativeDocDate(item.createdAt)
+                    : `${formatDocTimestamp(item.createdAt)}${
+                        diffText ? ` • ${diffText}` : ""
+                      }`;
+
+                  return (
+                    <div key={modalKey} className="doc-history-row">
+                      <div className="doc-history-info">
+                        <div className="doc-history-title-row">
+                          {item.docUrl ? (
+                            <a
+                              href={item.docUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="doc-history-link"
+                            >
+                              {item.docName} <ExternalLink size={13} />
+                            </a>
+                          ) : (
+                            <span className="doc-history-link">{item.docName}</span>
+                          )}
+                        </div>
+                        <div className="doc-history-meta">{metaLine}</div>
+                      </div>
+                      <div className="doc-history-actions">
+                        <button
+                          type="button"
+                          className={`btn-copy-link ${
+                            copiedKey === modalKey ? "copied" : ""
+                          }`}
+                          onClick={() =>
+                            handleCopyBsfLink(
+                              modalKey,
+                              item.versionAbbr,
+                              item.bookId,
+                              item.chapterStart,
+                              item.chapterEnd,
+                              item.options
+                            )
+                          }
+                          title="Copy a BSF link pre-filled with this passage and formatting"
+                        >
+                          {copiedKey === modalKey ? (
+                            <>
+                              <Check size={13} /> Copied URL
+                            </>
+                          ) : (
+                            <>
+                              <Link2 size={13} /> Copy BSF link
+                            </>
+                          )}
+                        </button>
+                        {item.docId && (
+                          <button
+                            type="button"
+                            className="btn-trash-doc"
+                            disabled={Boolean(trashingKeys[modalKey])}
+                            onClick={() =>
+                              handleTrashDocs(modalKey, [item.docId!])
+                            }
+                            title="Move to Google Drive trash"
+                            aria-label="Move to Google Drive trash"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Official Copyright & Legal Attribution Footer */}
       {/* Required by Crossway ESV API Guidelines: https://api.esv.org/#copyright */}

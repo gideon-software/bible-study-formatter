@@ -1,6 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { matchBookId, parseUrlSettings, parseBoolParam } from "./urlParams";
+import {
+  matchBookId,
+  parseUrlSettings,
+  parseBoolParam,
+  buildShareableUrl,
+} from "./urlParams";
 
 describe("URL Parameters Parser", () => {
   it("matches books by 3-letter code or full name", () => {
@@ -59,5 +64,39 @@ describe("URL Parameters Parser", () => {
     assert.strictEqual(parsed.bookId, "JUD");
     assert.strictEqual(parsed.chapterStart, 1);
     assert.strictEqual(parsed.chapterEnd, 1); // Jude has only 1 chapter
+  });
+
+  it("builds a shareable URL that round-trips through parseUrlSettings", () => {
+    const url = buildShareableUrl({
+      baseUrl: "https://bsf.example.com/",
+      versionId: "CSB",
+      bookId: "ROM",
+      chapterStart: 1,
+      chapterEnd: 2,
+      options: {
+        chapterHeaders: true,
+        chapterPageBreaks: false,
+        verseNumbers: true,
+        sectionHeadings: true,
+        titlePage: false,
+        fontName: "Georgia",
+        fontSize: 12,
+        lineSpacing: 1.5,
+      },
+    });
+
+    const parsed = parseUrlSettings(new URL(url).search);
+    assert.strictEqual(parsed.versionId, "CSB");
+    assert.strictEqual(parsed.bookId, "ROM");
+    assert.strictEqual(parsed.chapterStart, 1);
+    assert.strictEqual(parsed.chapterEnd, 2);
+    assert.strictEqual(parsed.options?.chapterHeaders, true);
+    assert.strictEqual(parsed.options?.chapterPageBreaks, false);
+    assert.strictEqual(parsed.options?.verseNumbers, true);
+    assert.strictEqual(parsed.options?.sectionHeadings, true);
+    assert.strictEqual(parsed.options?.titlePage, false);
+    assert.strictEqual(parsed.options?.fontName, "Georgia");
+    assert.strictEqual(parsed.options?.fontSize, 12);
+    assert.strictEqual(parsed.options?.lineSpacing, 1.5);
   });
 });

@@ -12,11 +12,15 @@ import {
 import { fetchEsvChapter } from "@/lib/bible/providers/esv";
 import { fetchApiBibleChapter } from "@/lib/bible/providers/apibible";
 import { fetchNetChapter } from "@/lib/bible/providers/net";
-import { createGoogleDocWithAuth } from "@/lib/google/docs";
+import {
+  createGoogleDocWithAuth,
+  formatDriveTimestampSuffix,
+  renameGoogleDriveFile,
+} from "@/lib/google/docs";
 import { getAuthenticatedClient } from "@/lib/google/auth";
 import { db } from "@/lib/db";
 import { executions, bibleCache } from "@/lib/db/schema";
-import { eq, desc, sql, inArray } from "drizzle-orm";
+import { eq, desc, sql, inArray, and, ilike, isNotNull } from "drizzle-orm";
 import { sendAlert } from "@/lib/alerts/notify";
 import {
   checkRateLimit,
@@ -37,12 +41,14 @@ export async function POST(request: Request) {
       chapterEnd,
       version = "ESV",
       options,
+      timeZone,
     }: {
       bookId: string;
       chapterStart: number;
       chapterEnd: number;
       version?: string;
       options: FormatOptions;
+      timeZone?: string;
     } = body;
 
     const book = getBookById(bookId);
@@ -239,8 +245,50 @@ export async function POST(request: Request) {
 
     const durationMs = Date.now() - startTime;
 
-    // 6. Log execution and rate limit events to Neon DB
+    // 6. Disambiguate any previous doc for the same passage/version in Google Drive, then log execution
     if (db) {
+      if (userEmail) {
+        try {
+          const prevDocs = await db
+            .select({
+              docId: executions.docId,
+              createdAt: executions.createdAt,
+            })
+            .from(executions)
+            .where(
+              and(
+                ilike(executions.userEmail, userEmail.trim()),
+                eq(executions.versionAbbr, version),
+                eq(executions.bookId, bookId),
+                eq(executions.chapterStart, chapterStart),
+                eq(executions.chapterEnd, chapterEnd),
+                isNotNull(executions.docUrl),
+                isNotNull(executions.docId)
+              )
+            )
+            .orderBy(desc(executions.createdAt))
+            .limit(1);
+
+          if (prevDocs.length > 0 && prevDocs[0].docId) {
+            const suffix = formatDriveTimestampSuffix(
+              new Date(prevDocs[0].createdAt),
+              timeZone
+            );
+            const renamedTitle = `${docTitle} ${suffix}`;
+            await renameGoogleDriveFile(
+              authClient,
+              prevDocs[0].docId,
+              renamedTitle
+            );
+          }
+        } catch (renameErr) {
+          console.warn(
+            "[Drive] Non-fatal error renaming previous duplicate doc:",
+            renameErr
+          );
+        }
+      }
+
       try {
         await db.insert(executions).values({
           userEmail,
