@@ -6,6 +6,7 @@ import {
   ParsedChapter,
   TextRun,
   getBookById,
+  normalizeParagraphRuns,
 } from "../books";
 
 export interface EsvApiResponse {
@@ -61,6 +62,16 @@ export function parseEsvHtml(
 
     // 1. Headings (h2, h3, h4)
     if (["h2", "h3", "h4"].includes(tagName)) {
+      if ($el.hasClass("psalm-title")) {
+        const runs = extractRuns($, $el, options, chapterNum, { italic: true });
+        if (runs.length > 0) {
+          paragraphs.push({
+            type: "paragraph",
+            runs,
+          });
+        }
+        return;
+      }
       if (options.sectionHeadings) {
         const text = $el.text().trim();
         if (text) {
@@ -75,12 +86,40 @@ export function parseEsvHtml(
       return;
     }
 
-    // 2. Poetry Line Groups (<p class="line-group"> or <div class="line-group">)
-    if ($el.hasClass("line-group")) {
-      $el.find(".line, .indent").each((_, lineEl) => {
-        const $line = $(lineEl);
-        const isIndent = $line.hasClass("indent");
-        const runs = extractRuns($, $line, options, chapterNum);
+    // 2. Direct poetic line (e.g. when HTML5 auto-closes <p class="block-indent"> before <h4 class="psalm-title">)
+    if ($el.hasClass("line") || $el.hasClass("indent")) {
+      const isIndent = $el.hasClass("indent");
+      const runs = extractRuns($, $el, options, chapterNum);
+      if (runs.length > 0) {
+        paragraphs.push({
+          type: "poetry",
+          indentSpaces: isIndent ? 8 : 4,
+          runs,
+        });
+      }
+      return;
+    }
+
+    // 3. Poetry Line Groups (<p class="block-indent"> or <p class="line-group">)
+    if (
+      $el.hasClass("line-group") ||
+      $el.hasClass("block-indent") ||
+      $el.find(".line").length > 0
+    ) {
+      $el.find("h4.psalm-title, .line, .indent").each((_, childEl) => {
+        const $child = $(childEl);
+        if ($child.is("h4.psalm-title")) {
+          const runs = extractRuns($, $child, options, chapterNum, { italic: true });
+          if (runs.length > 0) {
+            paragraphs.push({
+              type: "paragraph",
+              runs,
+            });
+          }
+          return;
+        }
+        const isIndent = $child.hasClass("indent");
+        const runs = extractRuns($, $child, options, chapterNum);
         if (runs.length > 0) {
           paragraphs.push({
             type: "poetry",
@@ -120,17 +159,25 @@ function extractRuns(
   $: cheerio.CheerioAPI,
   $parent: cheerio.Cheerio<AnyNode>,
   options: FormatOptions,
-  chapterNum: number
+  chapterNum: number,
+  initialStyle: { bold?: boolean; italic?: boolean; uppercase?: boolean } = {}
 ): TextRun[] {
   const runs: TextRun[] = [];
 
-  function traverse(node: AnyNode, currentStyle: { bold?: boolean; italic?: boolean }) {
+  function traverse(
+    node: AnyNode,
+    currentStyle: { bold?: boolean; italic?: boolean; uppercase?: boolean }
+  ) {
     if (node.type === "text") {
-      const text = (node as { data?: string }).data;
+      let text = (node as { data?: string }).data;
       if (text) {
+        if (currentStyle.uppercase) {
+          text = text.toUpperCase();
+        }
         runs.push({
           text,
-          ...currentStyle,
+          bold: currentStyle.bold,
+          italic: currentStyle.italic,
         });
       }
       return;
@@ -165,19 +212,27 @@ function extractRuns(
       }
 
       const isBold = currentStyle.bold || elem.name === "b" || elem.name === "strong";
-      const isItalic = currentStyle.italic || elem.name === "i" || elem.name === "em";
+      const isItalic =
+        currentStyle.italic ||
+        elem.name === "i" ||
+        elem.name === "em" ||
+        $node.hasClass("selah");
+      const isUppercase =
+        currentStyle.uppercase ||
+        $node.hasClass("divine-name") ||
+        $node.hasClass("small-caps");
 
       elem.children?.forEach((child) => {
-        traverse(child, { bold: isBold, italic: isItalic });
+        traverse(child, { bold: isBold, italic: isItalic, uppercase: isUppercase });
       });
     }
   }
 
   $parent.contents().each((_, child) => {
-    traverse(child, {});
+    traverse(child, initialStyle);
   });
 
-  return runs;
+  return normalizeParagraphRuns(runs);
 }
 
 /**

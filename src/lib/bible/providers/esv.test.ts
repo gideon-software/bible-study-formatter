@@ -112,4 +112,60 @@ describe("Crossway ESV HTML Parser", () => {
     assert(verse2, "Should extract verse 2");
     assert(verseP.runs.some((r) => r.text.includes("Paul, a servant")));
   });
+
+  it("parses Crossway ESV API v3 block-indent poetry (Romans 3:10-12) and strips embedded nbsp padding after verse numbers", () => {
+    const romans3PoetryHtml = `
+      <p class="block-indent"><span class="begin-line-group"></span>
+      <span id="p45003010_08-1" class="line">&nbsp;&nbsp;“None is righteous, no, not one;</span><br /><span id="p45003010_08-1" class="indent line">&nbsp;&nbsp;&nbsp;&nbsp;no, not one;</span><br /><span id="p45003011_08-1" class="indent line"><b class="verse-num inline" id="v45003011-1">11&nbsp;</b>&nbsp;&nbsp;&nbsp;&nbsp;no one understands;</span><br /><span id="p45003011_08-1" class="indent line">&nbsp;&nbsp;&nbsp;&nbsp;no one seeks for God.</span><br /><span id="p45003012_08-1" class="line"><b class="verse-num inline" id="v45003012-1">12&nbsp;</b>&nbsp;&nbsp;All have turned aside; together they have become worthless;</span><br /><span id="p45003012_08-1" class="indent line">&nbsp;&nbsp;&nbsp;&nbsp;no one does good,</span><br /><span id="p45003012_08-1" class="indent line">&nbsp;&nbsp;&nbsp;&nbsp;not even one.”</span><br /><span class="end-line-group"></span>
+      </p>
+    `;
+
+    const parsed = parseEsvHtml(romans3PoetryHtml, "ROM", 3, defaultOptions);
+    const poetryPs = parsed.paragraphs.filter((p) => p.type === "poetry");
+    assert.strictEqual(poetryPs.length, 7);
+
+    // Line 1: 4 spaces indent, no leading nbsp in text run
+    assert.strictEqual(poetryPs[0].indentSpaces, 4);
+    assert.strictEqual(poetryPs[0].runs[0].text, "“None is righteous, no, not one;");
+
+    // Line 2: 8 spaces indent, no leading nbsp in text run
+    assert.strictEqual(poetryPs[1].indentSpaces, 8);
+    assert.strictEqual(poetryPs[1].runs[0].text, "no, not one;");
+
+    // Line 3 (Verse 11): 8 spaces indent, superscript "11\u00A0", followed immediately by "no one understands;"
+    assert.strictEqual(poetryPs[2].indentSpaces, 8);
+    assert.strictEqual(poetryPs[2].runs[0].text, "11\u00A0");
+    assert.strictEqual(poetryPs[2].runs[0].superscript, true);
+    assert.strictEqual(poetryPs[2].runs[1].text, "no one understands;");
+
+    // Line 5 (Verse 12): 4 spaces indent, superscript "12\u00A0", followed immediately by "All have turned aside..."
+    assert.strictEqual(poetryPs[4].indentSpaces, 4);
+    assert.strictEqual(poetryPs[4].runs[0].text, "12\u00A0");
+    assert.strictEqual(poetryPs[4].runs[0].superscript, true);
+    assert.strictEqual(
+      poetryPs[4].runs[1].text,
+      "All have turned aside; together they have become worthless;"
+    );
+  });
+
+  it("preserves canonical psalm-title in italics even when sectionHeadings is false and uppercases divine-name", () => {
+    const psalm23Html = `
+      <h3 class="extra_space">The <span class="divine-name">Lord</span> Is My Shepherd</h3>
+      <p class="block-indent"><span class="begin-line-group"></span>
+      <h4 id="p19023001_05-1" class="psalm-title">A Psalm of David.</h4>
+      <span id="p19023001_05-1" class="line"><b class="chapter-num" id="v19023001-1">23:1&nbsp;</b>&nbsp;&nbsp;The <span class="divine-name">Lord</span> is my shepherd;</span><br /><span class="end-line-group"></span>
+      </p>
+    `;
+
+    const parsed = parseEsvHtml(psalm23Html, "PSA", 23, defaultOptions);
+    // 1. "Psalms 23", 2. "A Psalm of David." (italic paragraph), 3. poetry line
+    assert.strictEqual(parsed.paragraphs.length, 3);
+    assert.strictEqual(parsed.paragraphs[1].type, "paragraph");
+    assert.strictEqual(parsed.paragraphs[1].runs[0].text, "A Psalm of David.");
+    assert.strictEqual(parsed.paragraphs[1].runs[0].italic, true);
+
+    assert.strictEqual(parsed.paragraphs[2].type, "poetry");
+    const fullLineText = parsed.paragraphs[2].runs.map((r) => r.text).join("");
+    assert.strictEqual(fullLineText, "1\u00A0The LORD is my shepherd;");
+  });
 });
