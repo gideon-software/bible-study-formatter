@@ -1628,7 +1628,18 @@ export default function Home() {
           )}
         </p>
         <p className="app-footer-credit">
-          Developed by Gideon Software Solutions. Made available free of charge for personal and church ministry use.
+          Developed by{" "}
+          <a
+            href="https://www.gideonsoftware.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Gideon Software Solutions
+          </a>
+          . Made available free of charge for personal and church ministry use.{" • "}
+          <a href="mailto:gideonsoftwaresolutions@gmail.com?subject=Bible%20Study%20Formatter%20Issue%20Report">
+            Report an issue
+          </a>
         </p>
       </footer>
     </div>
