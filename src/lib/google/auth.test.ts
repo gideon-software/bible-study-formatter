@@ -4,12 +4,14 @@ import {
   serializeSessionCookie,
   parseSessionCookie,
   isAdminEmail,
+  SessionData,
 } from "./auth";
 
 describe("Google Auth & Signed Session Cookie Utilities", () => {
   it("signs and verifies a session payload via HMAC-SHA256", () => {
-    const payload = {
-      tokens: { access_token: "ya29.test", refresh_token: "1//test" },
+    const payload: SessionData = {
+      accessToken: "ya29.test",
+      refreshToken: "1//test",
       user: { email: "user@example.com", name: "Test User" },
     };
 
@@ -19,12 +21,13 @@ describe("Google Auth & Signed Session Cookie Utilities", () => {
     const parsed = parseSessionCookie(signed);
     assert.ok(parsed);
     assert.equal(parsed.user?.email, "user@example.com");
-    assert.equal(parsed.tokens.access_token, "ya29.test");
+    assert.equal(parsed.accessToken, "ya29.test");
+    assert.equal(parsed.refreshToken, "1//test");
   });
 
   it("rejects a tampered signed cookie payload or signature", () => {
-    const payload = {
-      tokens: { access_token: "ya29.test" },
+    const payload: SessionData = {
+      accessToken: "ya29.test",
       user: { email: "user@example.com" },
     };
 
@@ -38,7 +41,6 @@ describe("Google Auth & Signed Session Cookie Utilities", () => {
     // Forged unsigned JSON without real OAuth tokens
     const forgedAdminJson = JSON.stringify({
       user: { email: "admin@example.com" },
-      tokens: {},
     });
     assert.equal(parseSessionCookie(forgedAdminJson), null);
   });
@@ -56,4 +58,3 @@ describe("Google Auth & Signed Session Cookie Utilities", () => {
     }
   });
 });
-
