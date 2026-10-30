@@ -60,9 +60,10 @@ export function parseNetVerses(
       return match;
     });
 
-    // If verse starts with a Psalm superscription (<p class="psasuper">), inject verse number into the following <p>
+    // If verse starts with a Psalm superscription, Song of Solomon speaker, or Psalm 119 acrostic header,
+    // inject the verse number into the following <p> so the header does not swallow the verse number
     const trimmed = t.trim();
-    if (/^<p\s+class="psasuper"/i.test(trimmed)) {
+    if (/^<p\s+class="(?:psasuper|sosspeaker|lamhebrew)"/i.test(trimmed)) {
       const firstClose = t.indexOf(">");
       const nextP = t.indexOf("<p", firstClose + 1);
       if (nextP !== -1) {
@@ -92,9 +93,21 @@ export function parseNetVerses(
     const $el = $(el);
     const className = $el.attr("class") || "";
 
-    // A. Canonical Psalm superscription (<p class="psasuper">)
+    // A. Canonical Psalm superscription (<p class="psasuper">) -> italic
     if (className === "psasuper") {
       const runs = extractRuns($, $el, options, chapterNum, { italic: true });
+      if (runs.length > 0) {
+        paragraphs.push({
+          type: "paragraph",
+          runs,
+        });
+      }
+      return;
+    }
+
+    // A1. Song of Solomon speaker (<p class="sosspeaker">) & Psalm 119 acrostic (<p class="lamhebrew">) -> bold
+    if (className === "sosspeaker" || className === "lamhebrew") {
+      const runs = extractRuns($, $el, options, chapterNum, { bold: true });
       if (runs.length > 0) {
         paragraphs.push({
           type: "paragraph",

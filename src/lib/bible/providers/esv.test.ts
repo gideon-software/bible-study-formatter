@@ -168,4 +168,24 @@ describe("Crossway ESV HTML Parser", () => {
     const fullLineText = parsed.paragraphs[2].runs.map((r) => r.text).join("");
     assert.strictEqual(fullLineText, "1\u00A0The LORD is my shepherd;");
   });
+
+  it("preserves Song of Solomon .speaker and Psalm 119 .psalm-acrostic-title in bold even when sectionHeadings is false", () => {
+    const songAndAcrosticHtml = `
+      <h4 class="psalm-acrostic-title">Aleph</h4>
+      <p class="block-indent">
+        <h4 class="speaker">She</h4>
+        <span class="begin-line-group"></span>
+        <span class="line"><b class="verse-num inline">2&nbsp;</b>&nbsp;&nbsp;Let him kiss me with the kisses of his mouth!</span>
+      </p>
+    `;
+
+    const parsed = parseEsvHtml(songAndAcrosticHtml, "SNG", 1, defaultOptions);
+    // 1. "Song of Solomon 1", 2. "Aleph" (bold), 3. "She" (bold), 4. poetry line
+    assert.strictEqual(parsed.paragraphs.length, 4);
+    assert.strictEqual(parsed.paragraphs[1].runs[0].text, "Aleph");
+    assert.strictEqual(parsed.paragraphs[1].runs[0].bold, true);
+    assert.strictEqual(parsed.paragraphs[2].runs[0].text, "She");
+    assert.strictEqual(parsed.paragraphs[2].runs[0].bold, true);
+    assert.strictEqual(parsed.paragraphs[3].type, "poetry");
+  });
 });

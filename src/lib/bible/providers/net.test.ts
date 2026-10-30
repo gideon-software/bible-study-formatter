@@ -157,4 +157,29 @@ describe("NET Bible Parser (labs.bible.org)", () => {
     assert.strictEqual(parsed.paragraphs[3].type, "poetry");
     assert.strictEqual(parsed.paragraphs[3].indentSpaces, 8);
   });
+
+  it("preserves NET .sosspeaker and .lamhebrew headers in bold without swallowing verse numbers", () => {
+    const verses: NetApiVerse[] = [
+      {
+        bookname: "Psalms",
+        chapter: "119",
+        verse: "1",
+        text: '<p class="lamhebrew"><span class="hebrew">א</span> (<i>Alef</i>)<n id="1" /><p class="poetry">How blessed are those whose actions are blameless,</p>',
+      },
+      {
+        bookname: "The Song of Songs",
+        chapter: "1",
+        verse: "2",
+        text: '<p class="sosspeaker"><b><i>The Beloved to Her Lover:</i></b><n id="1" /> <p class="poetry">Oh, how I wish you would kiss me passionately!</p>',
+      },
+    ];
+
+    const parsed = parseNetVerses(verses, "PSA", 119, defaultOptions);
+    // 1. "Psalms 119", 2. "א (Alef)" (bold), 3. v1 poetry, 4. "The Beloved..." (bold), 5. v2 poetry
+    assert.strictEqual(parsed.paragraphs.length, 5);
+    assert.strictEqual(parsed.paragraphs[1].runs.every((r) => r.bold), true);
+    assert.strictEqual(parsed.paragraphs[2].runs[0].superscript, true);
+    assert.strictEqual(parsed.paragraphs[3].runs.every((r) => r.bold), true);
+    assert.strictEqual(parsed.paragraphs[4].runs[0].superscript, true);
+  });
 });

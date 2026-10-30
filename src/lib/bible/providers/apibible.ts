@@ -74,10 +74,23 @@ export function parseApiBibleHtml(
       return;
     }
 
-    // A0. Canonical Psalm Superscriptions (\d)
+    // A0. Canonical Psalm Superscriptions (\d) -> italic
     if (/\bd\b/.test(className)) {
       prevIsPoetry = false;
       const runs = extractRuns($, $el, options, chapterNum, { italic: true });
+      if (runs.length > 0) {
+        paragraphs.push({
+          type: "paragraph",
+          runs,
+        });
+      }
+      return;
+    }
+
+    // A1. Speaker Labels (\sp) & Psalm 119 Acrostic Headings (\qa or .qac) -> bold, always preserved
+    if (/\b(sp|qa)\b/.test(className) || $el.find(".qac").length > 0) {
+      prevIsPoetry = false;
+      const runs = extractRuns($, $el, options, chapterNum, { bold: true });
       if (runs.length > 0) {
         paragraphs.push({
           type: "paragraph",
@@ -107,10 +120,33 @@ export function parseApiBibleHtml(
       return;
     }
 
-    // B. Poetry Line Groups & Indented List Items (\q, \q1-4, \qc, \qr, \qm, \qd, \li, \li1-4, \lim)
-    if (/\b(q[1-4]?|qc|qr|qm[1-4]?|qd|li[1-4]?|lim[1-4]?)\b/.test(className)) {
-      const isExplicitDeeper = /\b(q[2-4]|qm[2-4]|li[2-4]|lim[2-4])\b/.test(className);
-      const isExplicitPrimary = /\b(q1|qm1|li1?|lim1?)\b/.test(className);
+    // B0. Centered Inscriptions (\pc) & Right-Aligned Refrains (\qr, \pmr)
+    if (/\b(pc|qr|pmr)\b/.test(className)) {
+      prevIsPoetry = false;
+      const isCentered = /\bpc\b/.test(className);
+      const runs = extractRuns($, $el, options, chapterNum);
+      if (runs.length > 0) {
+        paragraphs.push({
+          type: "paragraph",
+          alignment: isCentered ? "center" : "right",
+          runs,
+        });
+      }
+      return;
+    }
+
+    // B. Poetry Line Groups, Indented List Items, & Indented Prose/Letters (\q, \qc, \qm, \qd, \li, \lim, \pi, \pm, \pmo, \pmc)
+    if (
+      /\b(q[1-4]?|qc|qm[1-4]?|qd|li[1-4]?|lim[1-4]?|pi[1-4]?|pm|pmo|pmc)\b/.test(
+        className
+      )
+    ) {
+      const isExplicitDeeper = /\b(q[2-4]|qm[2-4]|li[2-4]|lim[2-4]|pi[2-4])\b/.test(
+        className
+      );
+      const isExplicitPrimary = /\b(q1|qm1|li1?|lim1?|pi1?|pm|pmo|pmc)\b/.test(
+        className
+      );
       const isContinuationLine =
         !isExplicitPrimary && prevIsPoetry && Boolean($el.attr("data-vid"));
       const isDeeperIndent = isExplicitDeeper || isContinuationLine;
@@ -225,10 +261,11 @@ function extractRuns(
         /\b(bd|b)\b/.test(className);
 
       const isItalic =
-        currentStyle.italic ||
-        elem.name === "i" ||
-        elem.name === "em" ||
-        /\b(it|add|bk|qs)\b/.test(className);
+        !isBold &&
+        (currentStyle.italic ||
+          elem.name === "i" ||
+          elem.name === "em" ||
+          /\b(it|add|bk|qs|tl)\b/.test(className));
 
       const isUppercase =
         currentStyle.uppercase || /\b(nd|sc)\b/.test(className);
@@ -283,7 +320,7 @@ export async function fetchApiBibleChapter(
   const queryParams = new URLSearchParams({
     "content-type": "html",
     "include-notes": "false",
-    "include-titles": String(Boolean(options.sectionHeadings)),
+    "include-titles": "true",
     "include-chapter-numbers": "false",
     "include-verse-numbers": String(options.verseNumbers),
     "include-verse-spans": "false",

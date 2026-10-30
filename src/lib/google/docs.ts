@@ -166,6 +166,8 @@ export function buildGoogleDocsRequests(
       let alignment: "CENTER" | "START" | "END" = "START";
       if (p.alignment === "center" || p.type === "heading") {
         alignment = "CENTER";
+      } else if (p.alignment === "right") {
+        alignment = "END";
       }
 
       paragraphRanges.push({

@@ -72,6 +72,16 @@ export function parseEsvHtml(
         }
         return;
       }
+      if ($el.hasClass("psalm-acrostic-title") || $el.hasClass("speaker")) {
+        const runs = extractRuns($, $el, options, chapterNum, { bold: true });
+        if (runs.length > 0) {
+          paragraphs.push({
+            type: "paragraph",
+            runs,
+          });
+        }
+        return;
+      }
       if (options.sectionHeadings) {
         const text = $el.text().trim();
         if (text) {
@@ -106,28 +116,40 @@ export function parseEsvHtml(
       $el.hasClass("block-indent") ||
       $el.find(".line").length > 0
     ) {
-      $el.find("h4.psalm-title, .line, .indent").each((_, childEl) => {
-        const $child = $(childEl);
-        if ($child.is("h4.psalm-title")) {
-          const runs = extractRuns($, $child, options, chapterNum, { italic: true });
+      $el
+        .find("h4.psalm-title, h4.psalm-acrostic-title, h4.speaker, .line, .indent")
+        .each((_, childEl) => {
+          const $child = $(childEl);
+          if ($child.is("h4.psalm-title")) {
+            const runs = extractRuns($, $child, options, chapterNum, { italic: true });
+            if (runs.length > 0) {
+              paragraphs.push({
+                type: "paragraph",
+                runs,
+              });
+            }
+            return;
+          }
+          if ($child.is("h4.psalm-acrostic-title, h4.speaker")) {
+            const runs = extractRuns($, $child, options, chapterNum, { bold: true });
+            if (runs.length > 0) {
+              paragraphs.push({
+                type: "paragraph",
+                runs,
+              });
+            }
+            return;
+          }
+          const isIndent = $child.hasClass("indent");
+          const runs = extractRuns($, $child, options, chapterNum);
           if (runs.length > 0) {
             paragraphs.push({
-              type: "paragraph",
+              type: "poetry",
+              indentSpaces: isIndent ? 8 : 4,
               runs,
             });
           }
-          return;
-        }
-        const isIndent = $child.hasClass("indent");
-        const runs = extractRuns($, $child, options, chapterNum);
-        if (runs.length > 0) {
-          paragraphs.push({
-            type: "poetry",
-            indentSpaces: isIndent ? 8 : 4,
-            runs,
-          });
-        }
-      });
+        });
       return;
     }
 

@@ -187,4 +187,28 @@ describe("API.Bible HTML Parser (CSB, NIV, NASB)", () => {
       indentedPs[0].runs.map((r) => r.text).join("").startsWith("‘Mene’ means that God has numbered")
     );
   });
+
+  it("preserves .sp speaker labels and .qac acrostic headings in bold, centers .pc inscriptions, and italicizes .tl transliterations", () => {
+    const html = `
+      <p class="s2"><span class="qac">א</span> <span class="tl">Aleph</span></p>
+      <p class="sp">Woman</p>
+      <p class="pc"><span class="sc">mene, mene, tekel, parsin</span></p>
+      <p class="p"><span class="v" data-number="26">26</span>“<span class="tl">Mene</span>: God has numbered the days.</p>
+    `;
+
+    const parsed = parseApiBibleHtml(html, "DAN", 5, defaultOptions);
+    // 1. "Daniel 5", 2. "א Aleph" (bold), 3. "Woman" (bold), 4. centered .pc, 5. prose with italic .tl
+    assert.strictEqual(parsed.paragraphs.length, 5);
+    assert.strictEqual(parsed.paragraphs[1].runs.every((r) => r.bold), true);
+    assert.strictEqual(parsed.paragraphs[2].runs[0].text, "Woman");
+    assert.strictEqual(parsed.paragraphs[2].runs[0].bold, true);
+    assert.strictEqual(parsed.paragraphs[3].alignment, "center");
+    assert.strictEqual(
+      parsed.paragraphs[3].runs[0].text,
+      "MENE, MENE, TEKEL, PARSIN"
+    );
+    const meneRun = parsed.paragraphs[4].runs.find((r) => r.text === "Mene");
+    assert(meneRun, "Should find transliterated Mene run");
+    assert.strictEqual(meneRun.italic, true);
+  });
 });
