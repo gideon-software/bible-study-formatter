@@ -1636,7 +1636,7 @@ export default function Home() {
           >
             Gideon Software Solutions
           </a>
-          . Made available free of charge for personal and church ministry use.{" • "}
+          {" • "}
           <a href="mailto:gideonsoftwaresolutions@gmail.com?subject=Bible%20Study%20Formatter%20Issue%20Report">
             Report an issue
           </a>
