@@ -107,10 +107,10 @@ export function parseApiBibleHtml(
       return;
     }
 
-    // B. Poetry Line Groups (\q, \q1, \q2, \q3, \q4, \qc, \qr, \qm, \qd)
-    if (/\b(q[1-4]?|qc|qr|qm[1-4]?|qd)\b/.test(className)) {
-      const isExplicitDeeper = /\b(q[2-4]|qm[2-4])\b/.test(className);
-      const isExplicitPrimary = /\b(q1|qm1)\b/.test(className);
+    // B. Poetry Line Groups & Indented List Items (\q, \q1-4, \qc, \qr, \qm, \qd, \li, \li1-4, \lim)
+    if (/\b(q[1-4]?|qc|qr|qm[1-4]?|qd|li[1-4]?|lim[1-4]?)\b/.test(className)) {
+      const isExplicitDeeper = /\b(q[2-4]|qm[2-4]|li[2-4]|lim[2-4])\b/.test(className);
+      const isExplicitPrimary = /\b(q1|qm1|li1?|lim1?)\b/.test(className);
       const isContinuationLine =
         !isExplicitPrimary && prevIsPoetry && Boolean($el.attr("data-vid"));
       const isDeeperIndent = isExplicitDeeper || isContinuationLine;

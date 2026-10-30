@@ -168,4 +168,23 @@ describe("API.Bible HTML Parser (CSB, NIV, NASB)", () => {
     assert.strictEqual(parsed.paragraphs[3].type, "poetry");
     assert.strictEqual(parsed.paragraphs[3].indentSpaces, 8);
   });
+
+  it("indents USFM list items (.li1 in CSB Daniel 5:26-28) by 4 spaces", () => {
+    const rawCsbDan5 = `
+      <p class="m"><span data-number="25" data-sid="DAN 5:25" class="v">25</span>“This is the writing that was inscribed: M<span class="sc">ene</span>, M<span class="sc">ene</span>, T<span class="sc">ekel</span>, and P<span class="sc">arsin</span>. <span data-number="26" data-sid="DAN 5:26" class="v">26</span>This is the interpretation of the message:</p>
+      <p data-vid="DAN 5:26" class="li1">‘Mene’\u00A0 means that God has numbered\u00A0 the days of your kingdom and brought it to an end.\u00A0</p>
+      <p class="li1"><span data-number="27" data-sid="DAN 5:27" class="v">27</span>‘Tekel’\u00A0 means that you have been weighed\u00A0 on the balance and found deficient.</p>
+      <p class="li1"><span data-number="28" data-sid="DAN 5:28" class="v">28</span>‘Peres’\u00A0 means that your kingdom has been divided and given to the Medes and Persians.”\u00A0</p>
+    `;
+
+    const parsed = parseApiBibleHtml(rawCsbDan5, "DAN", 5, defaultOptions);
+    const indentedPs = parsed.paragraphs.filter((p) => p.type === "poetry");
+    assert.strictEqual(indentedPs.length, 3);
+    assert.strictEqual(indentedPs[0].indentSpaces, 4);
+    assert.strictEqual(indentedPs[1].indentSpaces, 4);
+    assert.strictEqual(indentedPs[2].indentSpaces, 4);
+    assert(
+      indentedPs[0].runs.map((r) => r.text).join("").startsWith("‘Mene’ means that God has numbered")
+    );
+  });
 });

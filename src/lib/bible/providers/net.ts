@@ -45,7 +45,9 @@ export function parseNetVerses(
   // Build combined HTML with verse numbers injected and continuation poetry lines marked
   let combinedHtml = "";
   for (const v of verses) {
-    let t = v.text || "";
+    // Strip self-closing <n id="..." /> footnote tags before HTML5 parsing so Cheerio
+    // does not treat <n ... /> as an unclosed opening tag that swallows subsequent text!
+    let t = (v.text || "").replace(/<n\b[^>]*\/?>|<\/n>/gi, "");
     const vSpan = `<span class="v" data-number="${v.verse}">${v.verse}</span> `;
 
     // Mark 2nd+ poetic <p> tags within the same verse as continuation lines (8-space indent)

@@ -54,9 +54,17 @@ describe("NET Bible Parser (labs.bible.org)", () => {
     assert(verse1Run, "Should find verse 1 superscript");
     assert.strictEqual(verse1Run.superscript, true);
 
-    // Footnote marker should be stripped
-    const hasFootnote = proseP.runs.some((r) => r.text.includes("<n"));
-    assert.strictEqual(hasFootnote, false);
+    // Footnote marker should be stripped without truncating text after <n id="1" />
+    const fullProseText = proseP.runs.map((r) => r.text).join("");
+    assert.strictEqual(fullProseText.includes("<n"), false);
+    assert(
+      fullProseText.includes("was the Word, and the Word was with God"),
+      "Text after self-closing <n id=\"1\" /> must not be truncated"
+    );
+    assert(
+      fullProseText.includes("The Word was with God in the beginning."),
+      "Subsequent verses in the same paragraph must not be swallowed by <n id=\"1\" />"
+    );
   });
 
   it("extracts poetry lines with indentation", () => {
