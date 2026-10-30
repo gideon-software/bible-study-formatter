@@ -3,6 +3,12 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { executions, missingElements, bibleCache } from "@/lib/db/schema";
 import { desc, eq, like, sql } from "drizzle-orm";
+import {
+  getAdminEmails,
+  isAdminEmail,
+  parseSessionCookie,
+  SESSION_COOKIE_NAME,
+} from "@/lib/google/auth";
 
 const LEGACY_SHEET_CSV_URL =
   "https://docs.google.com/spreadsheets/d/1UaJORxJ3aHaRh_VerQ3rKBy5L2MaxcKR1ryIqu3g2LU/export?format=csv&gid=897246390";
@@ -14,35 +20,24 @@ async function verifyAdminSession(): Promise<{
   error?: string;
 }> {
   const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("bsf_session");
-  if (!sessionCookie) {
-    return { authorized: false, adminEmails: [], status: 401, error: "Unauthorized" };
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  const session = parseSessionCookie(sessionCookie?.value);
+  const adminEmails = getAdminEmails();
+
+  if (!session || !session.user) {
+    return { authorized: false, adminEmails, status: 401, error: "Unauthorized" };
   }
 
-  try {
-    const session = JSON.parse(sessionCookie.value);
-    const adminEmails = (process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean);
-
-    const isAdmin =
-      session.user?.email &&
-      adminEmails.includes(session.user.email.toLowerCase());
-
-    if (!isAdmin) {
-      return {
-        authorized: false,
-        adminEmails,
-        status: 403,
-        error: "Forbidden: Admin access required",
-      };
-    }
-
-    return { authorized: true, adminEmails, status: 200 };
-  } catch {
-    return { authorized: false, adminEmails: [], status: 401, error: "Unauthorized" };
+  if (!isAdminEmail(session.user.email)) {
+    return {
+      authorized: false,
+      adminEmails,
+      status: 403,
+      error: "Forbidden: Admin access required",
+    };
   }
+
+  return { authorized: true, adminEmails, status: 200 };
 }
 
 export async function GET(request: Request) {
@@ -68,140 +63,167 @@ export async function GET(request: Request) {
 
   if (db) {
     try {
-      // 1. Total executions & v2 executions
-      const totalsRes = await db
-        .select({
-          total: sql<number>`count(*)`,
-          v2Count: sql<number>`count(*) filter (where ${executions.userEmail} is not null)`,
-          legacyCount: sql<number>`count(*) filter (where ${executions.userEmail} is null)`,
-        })
-        .from(executions)
-        .where(filterClause);
+      const v2OptionsClause = sql`${filterClause} AND ${executions.optionsJson} IS NOT NULL AND (${executions.optionsJson}->>'source' IS NULL OR ${executions.optionsJson}->>'source' != 'legacy_v1')`;
+
+      // Run all 12 independent SQL read queries in parallel over Neon's HTTP driver
+      const [
+        totalsRes,
+        usersRes,
+        topBooks,
+        versionBreakdown,
+        monthlyData,
+        yearlyData,
+        chapterAnalysis,
+        optionsRes,
+        topFonts,
+        topUsers,
+        cacheStats,
+        recentRows,
+        elements,
+      ] = await Promise.all([
+        // 1. Total executions & v2 executions
+        db
+          .select({
+            total: sql<number>`count(*)`,
+            v2Count: sql<number>`count(*) filter (where ${executions.userEmail} is not null)`,
+            legacyCount: sql<number>`count(*) filter (where ${executions.userEmail} is null)`,
+          })
+          .from(executions)
+          .where(filterClause),
+
+        // 2. Unique signed-in users (v2.0+)
+        db
+          .select({
+            count: sql<number>`count(distinct lower(${executions.userEmail}))`,
+          })
+          .from(executions)
+          .where(filterClause),
+
+        // 3. Top Books
+        db
+          .select({
+            bookName: executions.bookName,
+            count: sql<number>`count(*)`,
+          })
+          .from(executions)
+          .where(filterClause)
+          .groupBy(executions.bookName)
+          .orderBy(desc(sql`count(*)`))
+          .limit(10),
+
+        // 4. Version / Translation Breakdown
+        db
+          .select({
+            versionAbbr: executions.versionAbbr,
+            count: sql<number>`count(*)`,
+          })
+          .from(executions)
+          .where(filterClause)
+          .groupBy(executions.versionAbbr)
+          .orderBy(desc(sql`count(*)`)),
+
+        // 5. Monthly History (last 12 active months)
+        db
+          .select({
+            month: sql<string>`to_char(${executions.createdAt}, 'YYYY-MM')`,
+            count: sql<number>`count(*)`,
+          })
+          .from(executions)
+          .where(filterClause)
+          .groupBy(sql`to_char(${executions.createdAt}, 'YYYY-MM')`)
+          .orderBy(desc(sql`to_char(${executions.createdAt}, 'YYYY-MM')`))
+          .limit(12),
+
+        // 6. Yearly History (all years, e.g. 2021-2026)
+        db
+          .select({
+            year: sql<string>`to_char(${executions.createdAt}, 'YYYY')`,
+            count: sql<number>`count(*)`,
+          })
+          .from(executions)
+          .where(filterClause)
+          .groupBy(sql`to_char(${executions.createdAt}, 'YYYY')`)
+          .orderBy(sql`to_char(${executions.createdAt}, 'YYYY')`),
+
+        // 7. Multi-chapter vs Single-chapter analysis
+        db
+          .select({
+            isMulti: sql<boolean>`${executions.chapterStart} != ${executions.chapterEnd}`,
+            count: sql<number>`count(*)`,
+          })
+          .from(executions)
+          .where(filterClause)
+          .groupBy(sql`${executions.chapterStart} != ${executions.chapterEnd}`),
+
+        // 8. Formatting Options Popularity (v2.0 runs with options_json)
+        db
+          .select({
+            totalWithOptions: sql<number>`count(*)`,
+            sectionHeadingsCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'sectionHeadings')::boolean is true)`,
+            titlePageCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'titlePage')::boolean is true)`,
+            pageBreaksCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'chapterPageBreaks')::boolean is true)`,
+            verseNumbersCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'verseNumbers')::boolean is true)`,
+            chapterHeadersCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'chapterHeaders')::boolean is true)`,
+          })
+          .from(executions)
+          .where(v2OptionsClause),
+
+        // 8b. Top Fonts
+        db
+          .select({
+            fontName: sql<string>`coalesce(${executions.optionsJson}->>'fontName', 'Arial')`,
+            count: sql<number>`count(*)`,
+          })
+          .from(executions)
+          .where(v2OptionsClause)
+          .groupBy(sql`coalesce(${executions.optionsJson}->>'fontName', 'Arial')`)
+          .orderBy(desc(sql`count(*)`))
+          .limit(5),
+
+        // 9. Top Active Users (v2.0+)
+        db
+          .select({
+            userEmail: sql<string>`lower(${executions.userEmail})`,
+            count: sql<number>`count(*)`,
+            lastActiveAt: sql<string>`max(${executions.createdAt})`,
+          })
+          .from(executions)
+          .where(sql`${filterClause} AND ${executions.userEmail} IS NOT NULL`)
+          .groupBy(sql`lower(${executions.userEmail})`)
+          .orderBy(desc(sql`count(*)`))
+          .limit(8),
+
+        // 10. Bible Cache Stats by Version
+        db
+          .select({
+            versionAbbr: sql<string>`split_part(${bibleCache.passageKey}, '/', 1)`,
+            count: sql<number>`count(*)`,
+          })
+          .from(bibleCache)
+          .groupBy(sql`split_part(${bibleCache.passageKey}, '/', 1)`)
+          .orderBy(desc(sql`count(*)`)),
+
+        // 11. Recent executions
+        db
+          .select()
+          .from(executions)
+          .where(filterClause)
+          .orderBy(desc(executions.createdAt))
+          .limit(50),
+
+        // 12. Missing elements (unresolved first)
+        db
+          .select()
+          .from(missingElements)
+          .where(eq(missingElements.resolved, false))
+          .orderBy(desc(missingElements.lastSeenAt))
+          .limit(50),
+      ]);
 
       const totalExecutions = Number(totalsRes[0]?.total || 0);
       const v2Executions = Number(totalsRes[0]?.v2Count || 0);
       const legacyExecutions = Number(totalsRes[0]?.legacyCount || 0);
-
-      // 2. Unique signed-in users (v2.0+)
-      const usersRes = await db
-        .select({
-          count: sql<number>`count(distinct lower(${executions.userEmail}))`,
-        })
-        .from(executions)
-        .where(filterClause);
       const uniqueUsers = Number(usersRes[0]?.count || 0);
-
-      // 3. Top Books
-      const topBooks = await db
-        .select({
-          bookName: executions.bookName,
-          count: sql<number>`count(*)`,
-        })
-        .from(executions)
-        .where(filterClause)
-        .groupBy(executions.bookName)
-        .orderBy(desc(sql`count(*)`))
-        .limit(10);
-
-      // 4. Version / Translation Breakdown
-      const versionBreakdown = await db
-        .select({
-          versionAbbr: executions.versionAbbr,
-          count: sql<number>`count(*)`,
-        })
-        .from(executions)
-        .where(filterClause)
-        .groupBy(executions.versionAbbr)
-        .orderBy(desc(sql`count(*)`));
-
-      // 5. Monthly History (last 12 active months)
-      const monthlyData = await db
-        .select({
-          month: sql<string>`to_char(${executions.createdAt}, 'YYYY-MM')`,
-          count: sql<number>`count(*)`,
-        })
-        .from(executions)
-        .where(filterClause)
-        .groupBy(sql`to_char(${executions.createdAt}, 'YYYY-MM')`)
-        .orderBy(desc(sql`to_char(${executions.createdAt}, 'YYYY-MM')`))
-        .limit(12);
-
-      // 6. Yearly History (all years, e.g. 2021-2026)
-      const yearlyData = await db
-        .select({
-          year: sql<string>`to_char(${executions.createdAt}, 'YYYY')`,
-          count: sql<number>`count(*)`,
-        })
-        .from(executions)
-        .where(filterClause)
-        .groupBy(sql`to_char(${executions.createdAt}, 'YYYY')`)
-        .orderBy(sql`to_char(${executions.createdAt}, 'YYYY')`);
-
-      // 7. Multi-chapter vs Single-chapter analysis
-      const chapterAnalysis = await db
-        .select({
-          isMulti: sql<boolean>`${executions.chapterStart} != ${executions.chapterEnd}`,
-          count: sql<number>`count(*)`,
-        })
-        .from(executions)
-        .where(filterClause)
-        .groupBy(sql`${executions.chapterStart} != ${executions.chapterEnd}`);
-
-      // 8. Formatting Options Popularity (v2.0 runs with options_json)
-      const v2OptionsClause = sql`${filterClause} AND ${executions.optionsJson} IS NOT NULL AND (${executions.optionsJson}->>'source' IS NULL OR ${executions.optionsJson}->>'source' != 'legacy_v1')`;
-      const optionsRes = await db
-        .select({
-          totalWithOptions: sql<number>`count(*)`,
-          sectionHeadingsCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'sectionHeadings')::boolean is true)`,
-          titlePageCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'titlePage')::boolean is true)`,
-          pageBreaksCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'chapterPageBreaks')::boolean is true)`,
-          verseNumbersCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'verseNumbers')::boolean is true)`,
-          chapterHeadersCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'chapterHeaders')::boolean is true)`,
-        })
-        .from(executions)
-        .where(v2OptionsClause);
-
-      const topFonts = await db
-        .select({
-          fontName: sql<string>`coalesce(${executions.optionsJson}->>'fontName', 'Arial')`,
-          count: sql<number>`count(*)`,
-        })
-        .from(executions)
-        .where(v2OptionsClause)
-        .groupBy(sql`coalesce(${executions.optionsJson}->>'fontName', 'Arial')`)
-        .orderBy(desc(sql`count(*)`))
-        .limit(5);
-
-      // 9. Top Active Users (v2.0+)
-      const topUsers = await db
-        .select({
-          userEmail: sql<string>`lower(${executions.userEmail})`,
-          count: sql<number>`count(*)`,
-          lastActiveAt: sql<string>`max(${executions.createdAt})`,
-        })
-        .from(executions)
-        .where(sql`${filterClause} AND ${executions.userEmail} IS NOT NULL`)
-        .groupBy(sql`lower(${executions.userEmail})`)
-        .orderBy(desc(sql`count(*)`))
-        .limit(8);
-
-      // 10. Bible Cache Stats by Version
-      const cacheStats = await db
-        .select({
-          versionAbbr: sql<string>`split_part(${bibleCache.passageKey}, '/', 1)`,
-          count: sql<number>`count(*)`,
-        })
-        .from(bibleCache)
-        .groupBy(sql`split_part(${bibleCache.passageKey}, '/', 1)`)
-        .orderBy(desc(sql`count(*)`));
-
-      // 11. Recent executions
-      const recentRows = await db
-        .select()
-        .from(executions)
-        .where(filterClause)
-        .orderBy(desc(executions.createdAt))
-        .limit(50);
 
       const recent = recentRows.map((r) => ({
         ...r,
@@ -212,14 +234,6 @@ export async function GET(request: Request) {
           !r.userEmail &&
           (r.optionsJson as { source?: string } | null)?.source === "legacy_v1",
       }));
-
-      // 12. Missing elements (unresolved first)
-      const elements = await db
-        .select()
-        .from(missingElements)
-        .where(eq(missingElements.resolved, false))
-        .orderBy(desc(missingElements.lastSeenAt))
-        .limit(50);
 
       return NextResponse.json({
         totalExecutions,

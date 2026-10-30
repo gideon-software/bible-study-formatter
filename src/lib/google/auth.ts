@@ -1,4 +1,125 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { google } from "googleapis";
+import type { NextResponse } from "next/server";
+
+export const SESSION_COOKIE_NAME = "bsf_session";
+export const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+
+export interface SessionUser {
+  email?: string | null;
+  name?: string | null;
+  picture?: string | null;
+}
+
+export interface SessionTokens {
+  accessToken?: string;
+  refreshToken?: string;
+  expiryDate?: number;
+}
+
+export interface SessionData extends SessionTokens {
+  user?: SessionUser;
+}
+
+function getSessionSecret(): string {
+  return (
+    process.env.SESSION_SECRET ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    process.env.CRON_SECRET ||
+    "bsf-local-dev-secret-key"
+  );
+}
+
+function signPayload(payloadB64: string): string {
+  return createHmac("sha256", getSessionSecret())
+    .update(payloadB64)
+    .digest("base64url");
+}
+
+/**
+ * Serializes and HMAC-SHA256 signs session data for the HTTP-only cookie.
+ */
+export function serializeSessionCookie(session: SessionData): string {
+  const payloadB64 = Buffer.from(JSON.stringify(session), "utf8").toString(
+    "base64url"
+  );
+  const signature = signPayload(payloadB64);
+  return `${payloadB64}.${signature}`;
+}
+
+/**
+ * Verifies and parses the session cookie value.
+ * Supports signed `payload.signature` tokens, with a legacy migration path
+ * for active pre-upgrade JSON cookies that contain OAuth credentials.
+ */
+export function parseSessionCookie(rawValue?: string | null): SessionData | null {
+  if (!rawValue) return null;
+
+  try {
+    // 1. Signed format: <base64url-payload>.<base64url-hmac>
+    if (!rawValue.startsWith("{") && rawValue.includes(".")) {
+      const dotIdx = rawValue.lastIndexOf(".");
+      const payloadB64 = rawValue.slice(0, dotIdx);
+      const signature = rawValue.slice(dotIdx + 1);
+      const expectedSig = signPayload(payloadB64);
+
+      const sigBuf = Buffer.from(signature);
+      const expectedBuf = Buffer.from(expectedSig);
+      if (
+        sigBuf.length !== expectedBuf.length ||
+        !timingSafeEqual(sigBuf, expectedBuf)
+      ) {
+        return null;
+      }
+
+      const jsonStr = Buffer.from(payloadB64, "base64url").toString("utf8");
+      return JSON.parse(jsonStr) as SessionData;
+    }
+
+    // 2. Legacy transition fallback: only accept if OAuth tokens are present
+    const parsed = JSON.parse(rawValue) as SessionData;
+    if (parsed && (parsed.accessToken || parsed.refreshToken)) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Writes the signed session cookie onto a NextResponse with standard security flags.
+ */
+export function setSessionCookie(
+  response: NextResponse,
+  session: SessionData
+): void {
+  response.cookies.set(SESSION_COOKIE_NAME, serializeSessionCookie(session), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_COOKIE_MAX_AGE,
+  });
+}
+
+/**
+ * Returns the normalized list of administrator email addresses from ADMIN_EMAILS.
+ */
+export function getAdminEmails(): string[] {
+  return (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Checks whether the given email belongs to a configured administrator.
+ */
+export function isAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return getAdminEmails().includes(email.trim().toLowerCase());
+}
 
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/documents",
@@ -6,6 +127,15 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
 ];
+
+export function resolveRedirectUri(request: Request): string {
+  if (process.env.GOOGLE_REDIRECT_URI) {
+    return process.env.GOOGLE_REDIRECT_URI;
+  }
+  const host = request.headers.get("host") || "localhost:3000";
+  const protocol = request.headers.get("x-forwarded-proto") || "http";
+  return `${protocol}://${host}/api/auth/callback/google`;
+}
 
 export function getOAuth2Client(redirectUri?: string) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -45,12 +175,6 @@ export async function exchangeCodeForTokens(code: string, redirectUri?: string) 
       picture: userInfo.data.picture,
     },
   };
-}
-
-export interface SessionTokens {
-  accessToken?: string;
-  refreshToken?: string;
-  expiryDate?: number;
 }
 
 export async function getAuthenticatedClient(tokens: SessionTokens): Promise<{

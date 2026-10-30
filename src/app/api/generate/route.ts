@@ -17,7 +17,12 @@ import {
   formatDriveTimestampSuffix,
   renameGoogleDriveFile,
 } from "@/lib/google/docs";
-import { getAuthenticatedClient } from "@/lib/google/auth";
+import {
+  getAuthenticatedClient,
+  parseSessionCookie,
+  SESSION_COOKIE_NAME,
+  setSessionCookie,
+} from "@/lib/google/auth";
 import { db } from "@/lib/db";
 import { executions, bibleCache } from "@/lib/db/schema";
 import { eq, desc, sql, inArray, and, ilike, isNotNull } from "drizzle-orm";
@@ -80,8 +85,9 @@ export async function POST(request: Request) {
 
     // 1. Check user authentication
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("bsf_session");
-    if (!sessionCookie) {
+    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+    const session = parseSessionCookie(sessionCookie?.value);
+    if (!session) {
       return NextResponse.json(
         {
           error: "Authentication required",
@@ -93,7 +99,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const session = JSON.parse(sessionCookie.value);
     const userEmail = session.user?.email || "anonymous";
     userEmailForLock = userEmail;
 
@@ -104,7 +109,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Estimate uncached chapters before starting
+    // 2. Batch-load any cached chapters in a single DB round-trip
+    const cachedChapterMap = new Map<string, ParsedChapter>();
     let estimatedUncached = chapterEnd - chapterStart + 1;
     if (db) {
       try {
@@ -114,10 +120,21 @@ export async function POST(request: Request) {
         }
         if (neededKeys.length > 0) {
           const existing = await db
-            .select({ key: bibleCache.passageKey })
+            .select({
+              key: bibleCache.passageKey,
+              contentJson: bibleCache.contentJson,
+            })
             .from(bibleCache)
             .where(inArray(bibleCache.passageKey, neededKeys));
-          estimatedUncached = Math.max(0, neededKeys.length - existing.length);
+          for (const row of existing) {
+            if (row.contentJson) {
+              cachedChapterMap.set(row.key, row.contentJson as ParsedChapter);
+            }
+          }
+          estimatedUncached = Math.max(
+            0,
+            neededKeys.length - cachedChapterMap.size
+          );
         }
       } catch (cacheCheckErr) {
         console.warn("[RateLimit] Cache check error:", cacheCheckErr);
@@ -143,30 +160,14 @@ export async function POST(request: Request) {
     }
     lockAcquired = true;
 
-    // 4. Fetch and parse each chapter (using Neon cache if available)
+    // 4. Fetch and parse each chapter (using batch-loaded cache Map first)
     const chapters: ParsedChapter[] = [];
     let uncachedDownloadedCount = 0;
 
     for (let ch = chapterStart; ch <= chapterEnd; ch++) {
       const cacheKey = `${version}/${bookId}/${ch}`;
-      let parsedCh: ParsedChapter | null = null;
-
-      // Try reading from Neon DB cache
-      if (db) {
-        try {
-          const cached = await db
-            .select()
-            .from(bibleCache)
-            .where(eq(bibleCache.passageKey, cacheKey))
-            .limit(1);
-
-          if (cached.length > 0 && cached[0].contentJson) {
-            parsedCh = cached[0].contentJson as ParsedChapter;
-          }
-        } catch (cacheErr) {
-          console.warn("[Cache] Read error:", cacheErr);
-        }
-      }
+      let parsedCh: ParsedChapter | null =
+        cachedChapterMap.get(cacheKey) || null;
 
       // If not cached, fetch from provider with full structural options so cache is reusable
       if (!parsedCh) {
@@ -203,7 +204,7 @@ export async function POST(request: Request) {
               })
               .onConflictDoNothing();
 
-            // Rolling cache pruning for ESV
+            // Rolling cache pruning for ESV (single batched DELETE)
             if (version === "ESV") {
               const esvEntries = await db
                 .select({ id: bibleCache.id })
@@ -212,10 +213,10 @@ export async function POST(request: Request) {
                 .orderBy(desc(bibleCache.createdAt));
 
               if (esvEntries.length > 10) {
-                const toPrune = esvEntries.slice(10);
-                for (const entry of toPrune) {
-                  await db.delete(bibleCache).where(eq(bibleCache.id, entry.id));
-                }
+                const idsToPrune = esvEntries.slice(10).map((e) => e.id);
+                await db
+                  .delete(bibleCache)
+                  .where(inArray(bibleCache.id, idsToPrune));
               }
             }
           } catch (cacheWriteErr) {
@@ -321,20 +322,13 @@ export async function POST(request: Request) {
       durationMs,
     });
 
-    // If Google OAuth tokens were refreshed, update session cookie
+    // If Google OAuth tokens were refreshed, update signed session cookie
     if (refreshedTokens) {
-      const updatedSession = {
+      setSessionCookie(response, {
         ...session,
         accessToken: refreshedTokens.accessToken || session.accessToken,
         refreshToken: refreshedTokens.refreshToken || session.refreshToken,
         expiryDate: refreshedTokens.expiryDate || session.expiryDate,
-      };
-      response.cookies.set("bsf_session", JSON.stringify(updatedSession), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7, // 7 days
       });
     }
 

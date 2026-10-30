@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { SESSION_COOKIE_NAME } from "@/lib/google/auth";
 
 export async function POST() {
   const response = NextResponse.json({ success: true });
-  response.cookies.delete("bsf_session");
+  response.cookies.delete(SESSION_COOKIE_NAME);
   return response;
 }

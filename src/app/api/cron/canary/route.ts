@@ -3,7 +3,7 @@ import { fetchEsvChapter } from "@/lib/bible/providers/esv";
 import { fetchApiBibleChapter } from "@/lib/bible/providers/apibible";
 import { fetchNetChapter } from "@/lib/bible/providers/net";
 import { sendAlert } from "@/lib/alerts/notify";
-import { FormatOptions } from "@/lib/bible/books";
+import { DEFAULT_FORMAT_OPTIONS } from "@/lib/bible/books";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -20,16 +20,7 @@ export async function GET(request: Request) {
   }
 
   const startTime = Date.now();
-  const testOptions: FormatOptions = {
-    chapterHeaders: true,
-    chapterPageBreaks: true,
-    sectionHeadings: false,
-    verseNumbers: true,
-    titlePage: false,
-    fontName: "Arial",
-    fontSize: 11,
-    lineSpacing: 2,
-  };
+  const testOptions = DEFAULT_FORMAT_OPTIONS;
 
   const checks = [
     {

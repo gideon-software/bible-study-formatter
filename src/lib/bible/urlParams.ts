@@ -1,14 +1,12 @@
-import { BIBLE_BOOKS, SUPPORTED_VERSIONS, FormatOptions } from "./books";
+import {
+  BIBLE_BOOKS,
+  SUPPORTED_VERSIONS,
+  SUPPORTED_FONT_FAMILIES,
+  FormatOptions,
+  getBookByNameOrId,
+} from "./books";
 
-export const ALLOWED_FONTS = [
-  "Arial",
-  "Georgia",
-  "Times New Roman",
-  "Roboto",
-  "Trebuchet MS",
-  "Verdana",
-  "Courier New",
-] as const;
+export const ALLOWED_FONTS = SUPPORTED_FONT_FAMILIES;
 
 export interface ParsedUrlSettings {
   versionId?: string;
@@ -26,25 +24,18 @@ export interface ParsedUrlSettings {
  */
 export function matchBookId(query: string): string | null {
   if (!query || typeof query !== "string") return null;
-  const clean = query.trim().toLowerCase();
-  const condensed = clean.replace(/[^a-z0-9]/g, "");
+  const direct = getBookByNameOrId(query);
+  if (direct) return direct.id;
 
-  // 1. Direct match on 3-letter book ID
-  const directId = BIBLE_BOOKS.find((b) => b.id.toLowerCase() === clean);
-  if (directId) return directId.id;
+  const condensed = query.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!condensed) return null;
 
-  // 2. Direct match on full book name
-  const directName = BIBLE_BOOKS.find((b) => b.name.toLowerCase() === clean);
-  if (directName) return directName.id;
-
-  // 3. Condensed match (handles "1corinthians", "songofsolomon", etc.)
+  // Condensed match (handles "1corinthians", "songofsolomon", etc.)
   const condensedMatch = BIBLE_BOOKS.find((b) => {
     const bCondensed = b.name.toLowerCase().replace(/[^a-z0-9]/g, "");
     return bCondensed === condensed;
   });
-  if (condensedMatch) return condensedMatch.id;
-
-  return null;
+  return condensedMatch ? condensedMatch.id : null;
 }
 
 /**

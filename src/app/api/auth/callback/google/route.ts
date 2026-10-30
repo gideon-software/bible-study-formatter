@@ -1,40 +1,33 @@
 import { NextResponse } from "next/server";
-import { exchangeCodeForTokens } from "@/lib/google/auth";
+import {
+  exchangeCodeForTokens,
+  resolveRedirectUri,
+  setSessionCookie,
+} from "@/lib/google/auth";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const state = searchParams.get("state") || "/";
+  const rawState = searchParams.get("state") || "/";
+  // Prevent open redirects by only allowing internal relative paths
+  const safeState =
+    rawState.startsWith("/") && !rawState.startsWith("//") ? rawState : "/";
 
   if (!code) {
     return NextResponse.redirect(new URL("/?auth_error=no_code", request.url));
   }
 
   try {
-    const host = request.headers.get("host") || "localhost:3000";
-    const protocol = request.headers.get("x-forwarded-proto") || "http";
-    const redirectUri =
-      process.env.GOOGLE_REDIRECT_URI ||
-      `${protocol}://${host}/api/auth/callback/google`;
-
+    const redirectUri = resolveRedirectUri(request);
     const { tokens, user } = await exchangeCodeForTokens(code, redirectUri);
 
-    const sessionPayload = {
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiryDate: tokens.expiry_date,
+    const response = NextResponse.redirect(new URL(safeState, request.url));
+
+    setSessionCookie(response, {
+      accessToken: tokens.access_token || undefined,
+      refreshToken: tokens.refresh_token || undefined,
+      expiryDate: tokens.expiry_date || undefined,
       user,
-    };
-
-    const response = NextResponse.redirect(new URL(state, request.url));
-
-    // Store auth session in secure HTTP-only cookie
-    response.cookies.set("bsf_session", JSON.stringify(sessionPayload), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
     return response;

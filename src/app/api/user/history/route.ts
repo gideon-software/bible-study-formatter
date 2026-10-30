@@ -4,19 +4,24 @@ import { db } from "@/lib/db";
 import { executions } from "@/lib/db/schema";
 import { desc, ilike, isNotNull, and, inArray, eq } from "drizzle-orm";
 import { getDocTitle } from "@/lib/bible/books";
-import { getAuthenticatedClient } from "@/lib/google/auth";
+import {
+  getAuthenticatedClient,
+  parseSessionCookie,
+  SESSION_COOKIE_NAME,
+  setSessionCookie,
+} from "@/lib/google/auth";
 import { trashGoogleDriveFile, renameGoogleDriveFile } from "@/lib/google/docs";
 
 export async function GET() {
   await connection();
   const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("bsf_session");
-  if (!sessionCookie) {
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  const session = parseSessionCookie(sessionCookie?.value);
+  if (!session) {
     return NextResponse.json({ authenticated: false, history: [] });
   }
 
   try {
-    const session = JSON.parse(sessionCookie.value);
     const userEmail = session.user?.email;
     if (!userEmail) {
       return NextResponse.json({ authenticated: false, history: [] });
@@ -74,13 +79,13 @@ export async function GET() {
 export async function DELETE(request: Request) {
   await connection();
   const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("bsf_session");
-  if (!sessionCookie) {
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  const session = parseSessionCookie(sessionCookie?.value);
+  if (!session) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
   try {
-    const session = JSON.parse(sessionCookie.value);
     const userEmail = session.user?.email;
     if (!userEmail) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401 });
@@ -131,7 +136,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "No matching documents found" }, { status: 404 });
     }
 
-    const { client: authClient } = await getAuthenticatedClient({
+    const { client: authClient, refreshedTokens } = await getAuthenticatedClient({
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
       expiryDate: session.expiryDate,
@@ -224,10 +229,21 @@ export async function DELETE(request: Request) {
       })
     );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       trashedIds: ownedDocIds,
     });
+
+    if (refreshedTokens) {
+      setSessionCookie(response, {
+        ...session,
+        accessToken: refreshedTokens.accessToken || session.accessToken,
+        refreshToken: refreshedTokens.refreshToken || session.refreshToken,
+        expiryDate: refreshedTokens.expiryDate || session.expiryDate,
+      });
+    }
+
+    return response;
   } catch (err) {
     console.error("Failed to trash documents:", err);
     return NextResponse.json(

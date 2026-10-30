@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GoogleLogo } from "@/components/GoogleLogo";
+import { SUPPORTED_VERSIONS } from "@/lib/bible/books";
 
 interface AdminStats {
   totalExecutions: number;
@@ -764,7 +765,7 @@ export default function AdminPage() {
           </div>
 
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "1rem" }}>
-            {["ESV", "CSB", "NIV", "NASB", "NET"].map((ver) => {
+            {SUPPORTED_VERSIONS.map((v) => v.abbr).map((ver) => {
               const count =
                 stats?.cacheStats?.find((c) => c.versionAbbr === ver)?.count || 0;
               return (

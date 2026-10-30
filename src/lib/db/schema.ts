@@ -7,24 +7,35 @@ import {
   boolean,
   timestamp,
   json,
+  index,
 } from "drizzle-orm/pg-core";
 
-export const executions = pgTable("executions", {
-  id: serial("id").primaryKey(),
-  userEmail: varchar("user_email", { length: 255 }),
-  versionAbbr: varchar("version_abbr", { length: 20 }).notNull(),
-  bookId: varchar("book_id", { length: 10 }).notNull(),
-  bookName: varchar("book_name", { length: 100 }).notNull(),
-  chapterStart: integer("chapter_start").notNull(),
-  chapterEnd: integer("chapter_end").notNull(),
-  docId: varchar("doc_id", { length: 255 }),
-  docUrl: text("doc_url"),
-  optionsJson: json("options_json"),
-  durationMs: integer("duration_ms"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const executions = pgTable(
+  "executions",
+  {
+    id: serial("id").primaryKey(),
+    userEmail: varchar("user_email", { length: 255 }),
+    versionAbbr: varchar("version_abbr", { length: 20 }).notNull(),
+    bookId: varchar("book_id", { length: 10 }).notNull(),
+    bookName: varchar("book_name", { length: 100 }).notNull(),
+    chapterStart: integer("chapter_start").notNull(),
+    chapterEnd: integer("chapter_end").notNull(),
+    docId: varchar("doc_id", { length: 255 }),
+    docUrl: text("doc_url"),
+    optionsJson: json("options_json"),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("executions_user_created_idx").on(table.userEmail, table.createdAt),
+    index("executions_created_at_idx").on(table.createdAt),
+    index("executions_doc_id_idx").on(table.docId),
+    index("executions_book_name_idx").on(table.bookName),
+    index("executions_version_idx").on(table.versionAbbr),
+  ]
+);
 
 export const missingElements = pgTable("missing_elements", {
   id: serial("id").primaryKey(),
@@ -65,15 +76,25 @@ export const userPreferences = pgTable("user_preferences", {
     .notNull(),
 });
 
-export const rateLimitEvents = pgTable("rate_limit_events", {
-  id: serial("id").primaryKey(),
-  userEmail: varchar("user_email", { length: 255 }).notNull(),
-  eventType: varchar("event_type", { length: 50 }).notNull(), // "doc_generation" | "uncached_chapter"
-  units: integer("units").default(1).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const rateLimitEvents = pgTable(
+  "rate_limit_events",
+  {
+    id: serial("id").primaryKey(),
+    userEmail: varchar("user_email", { length: 255 }).notNull(),
+    eventType: varchar("event_type", { length: 50 }).notNull(), // "doc_generation" | "uncached_chapter"
+    units: integer("units").default(1).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("rate_limit_events_user_created_idx").on(
+      table.userEmail,
+      table.createdAt
+    ),
+    index("rate_limit_events_created_idx").on(table.createdAt),
+  ]
+);
 
 export type Execution = typeof executions.$inferSelect;
 export type NewExecution = typeof executions.$inferInsert;

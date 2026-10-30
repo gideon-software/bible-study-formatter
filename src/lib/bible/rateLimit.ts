@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { rateLimitEvents } from "@/lib/db/schema";
 import { sql } from "drizzle-orm";
+import { isAdminEmail } from "@/lib/google/auth";
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -67,12 +68,7 @@ export function clearInFlightLocks(): void {
 }
 
 export function isAdminUser(userEmail: string): boolean {
-  if (!userEmail) return false;
-  const adminEmails = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return adminEmails.includes(userEmail.toLowerCase().trim());
+  return isAdminEmail(userEmail);
 }
 
 /**
@@ -250,27 +246,28 @@ export async function recordRateLimitEvents({
 
   try {
     const emailKey = userEmail.toLowerCase().trim();
+    const eventsToInsert: Array<typeof rateLimitEvents.$inferInsert> = [
+      {
+        userEmail: emailKey,
+        eventType: "doc_generation",
+        units: 1,
+      },
+    ];
 
-    // 1. Record document generation event
-    await db.insert(rateLimitEvents).values({
-      userEmail: emailKey,
-      eventType: "doc_generation",
-      units: 1,
-    });
-
-    // 2. If uncached chapters were downloaded, record them
     if (uncachedChaptersCount > 0) {
-      await db.insert(rateLimitEvents).values({
+      eventsToInsert.push({
         userEmail: emailKey,
         eventType: "uncached_chapter",
         units: uncachedChaptersCount,
       });
     }
 
-    // 3. Asynchronously prune events older than 24 hours
-    await db
-      .delete(rateLimitEvents)
-      .where(sql`${rateLimitEvents.createdAt} < NOW() - INTERVAL '24 hours'`);
+    await Promise.all([
+      db.insert(rateLimitEvents).values(eventsToInsert),
+      db
+        .delete(rateLimitEvents)
+        .where(sql`${rateLimitEvents.createdAt} < NOW() - INTERVAL '24 hours'`),
+    ]);
   } catch (err) {
     console.warn("[RateLimit] Error recording rate limit events:", err);
   }

@@ -2,8 +2,13 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  BIBLE_BOOKS,
+  OT_BOOKS,
+  NT_BOOKS,
   SUPPORTED_VERSIONS,
+  SUPPORTED_FONT_FAMILIES,
+  FONT_FAMILY_CSS_MAP,
+  DEFAULT_FORMAT_OPTIONS,
+  DEFAULT_VERSION,
   FormatOptions,
   getBookChapters,
   validateEsvPassageRange,
@@ -139,28 +144,120 @@ function describeOptionsDiff(
   return diffs.length > 0 ? diffs.join(" • ") : null;
 }
 
-const FONT_FAMILY_MAP: Record<string, string> = {
-  Arial: "Arial, Helvetica, sans-serif",
-  Georgia: "Georgia, Cambria, serif",
-  "Times New Roman": "'Times New Roman', Times, serif",
-  Roboto: "'Roboto', sans-serif",
-  "Trebuchet MS": "'Trebuchet MS', 'Lucida Sans Unicode', sans-serif",
-  Verdana: "Verdana, Geneva, sans-serif",
-  "Courier New": "'Courier New', Courier, monospace",
-};
+const STORAGE_KEYS = {
+  USER_DEFAULTS: "bsf_user_defaults",
+  CURRENT_OPTIONS: "bsf_current_options",
+  LAST_PASSAGE: "bsf_last_passage",
+  CURRENT_VERSION: "bsf_current_version",
+} as const;
 
-const SYSTEM_DEFAULT_OPTIONS: FormatOptions = {
-  chapterHeaders: true,
-  chapterPageBreaks: true,
-  verseNumbers: true,
-  sectionHeadings: false,
-  titlePage: false,
-  fontName: "Arial",
-  fontSize: 11,
-  lineSpacing: 2,
-};
+function readStorageJson<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch (e) {
+    console.error(`Failed to read ${key}:`, e);
+    return null;
+  }
+}
 
-const SYSTEM_DEFAULT_VERSION = "ESV";
+function writeStorageJson(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.error(`Failed to write ${key}:`, e);
+  }
+}
+
+function readStorageString(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.error(`Failed to read ${key}:`, e);
+    return null;
+  }
+}
+
+function writeStorageString(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.error(`Failed to write ${key}:`, e);
+  }
+}
+
+interface DocHistoryRowActionsProps {
+  rowKey: string;
+  item: DocHistoryItem;
+  copiedKey: string | null;
+  isTrashing: boolean;
+  onCopyLink: (
+    key: string,
+    versionAbbr: string,
+    bookId: string,
+    chapterStart: number,
+    chapterEnd: number,
+    options?: Partial<FormatOptions> | null
+  ) => void;
+  onTrash: (key: string, docIds: string[]) => void;
+}
+
+function DocHistoryRowActions({
+  rowKey,
+  item,
+  copiedKey,
+  isTrashing,
+  onCopyLink,
+  onTrash,
+}: DocHistoryRowActionsProps) {
+  const isCopied = copiedKey === rowKey;
+  return (
+    <div className="doc-history-actions">
+      <button
+        type="button"
+        className={`btn-copy-link ${isCopied ? "copied" : ""}`}
+        onClick={() =>
+          onCopyLink(
+            rowKey,
+            item.versionAbbr,
+            item.bookId,
+            item.chapterStart,
+            item.chapterEnd,
+            item.options
+          )
+        }
+        title="Copy a BSF link pre-filled with this passage and formatting"
+      >
+        {isCopied ? (
+          <>
+            <Check size={13} /> Copied URL
+          </>
+        ) : (
+          <>
+            <Link2 size={13} /> Copy BSF link
+          </>
+        )}
+      </button>
+
+      {item.docId && (
+        <button
+          type="button"
+          className="btn-trash-doc"
+          disabled={isTrashing}
+          onClick={() => onTrash(rowKey, [item.docId!])}
+          title="Move to Google Drive trash"
+          aria-label="Move to Google Drive trash"
+        >
+          <Trash2 size={13} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+const FONT_FAMILY_MAP = FONT_FAMILY_CSS_MAP;
+const SYSTEM_DEFAULT_OPTIONS = DEFAULT_FORMAT_OPTIONS;
+const SYSTEM_DEFAULT_VERSION = DEFAULT_VERSION;
 
 export default function Home() {
   // Auth state
@@ -251,52 +348,38 @@ export default function Home() {
       const urlSettings = parseUrlSettings(window.location.search);
 
       // 2. Read saved defaults from localStorage
-      let localDefaults: { version: string; options: FormatOptions } = {
-        version: SYSTEM_DEFAULT_VERSION,
-        options: { ...SYSTEM_DEFAULT_OPTIONS },
-      };
-      try {
-        const rawSaved = localStorage.getItem("bsf_user_defaults");
-        if (rawSaved) {
-          const parsed = JSON.parse(rawSaved);
-          if (parsed?.options) {
-            localDefaults = {
-              version: parsed.version || SYSTEM_DEFAULT_VERSION,
-              options: { ...SYSTEM_DEFAULT_OPTIONS, ...parsed.options },
+      const parsedSaved = readStorageJson<{
+        version?: string;
+        options?: Partial<FormatOptions>;
+      }>(STORAGE_KEYS.USER_DEFAULTS);
+      const localDefaults: { version: string; options: FormatOptions } =
+        parsedSaved?.options
+          ? {
+              version: parsedSaved.version || SYSTEM_DEFAULT_VERSION,
+              options: { ...SYSTEM_DEFAULT_OPTIONS, ...parsedSaved.options },
+            }
+          : {
+              version: SYSTEM_DEFAULT_VERSION,
+              options: { ...SYSTEM_DEFAULT_OPTIONS },
             };
-          }
-        }
-      } catch (e) {
-        console.error("Failed to read bsf_user_defaults:", e);
-      }
 
       // 3. Read current session preferences from localStorage
-      let localCurrentOptions: FormatOptions | null = null;
-      try {
-        const rawCur = localStorage.getItem("bsf_current_options");
-        if (rawCur) {
-          localCurrentOptions = { ...SYSTEM_DEFAULT_OPTIONS, ...JSON.parse(rawCur) };
-        }
-      } catch (e) {
-        console.error("Failed to read bsf_current_options:", e);
-      }
+      const parsedCurOpts = readStorageJson<Partial<FormatOptions>>(
+        STORAGE_KEYS.CURRENT_OPTIONS
+      );
+      const localCurrentOptions: FormatOptions | null = parsedCurOpts
+        ? { ...SYSTEM_DEFAULT_OPTIONS, ...parsedCurOpts }
+        : null;
 
-      let localPassage: { bookId: string; chapterStart: number; chapterEnd: number } | null = null;
-      try {
-        const rawPassage = localStorage.getItem("bsf_last_passage");
-        if (rawPassage) {
-          localPassage = JSON.parse(rawPassage);
-        }
-      } catch (e) {
-        console.error("Failed to read bsf_last_passage:", e);
-      }
+      const localPassage = readStorageJson<{
+        bookId: string;
+        chapterStart: number;
+        chapterEnd: number;
+      }>(STORAGE_KEYS.LAST_PASSAGE);
 
-      let localCurrentVersion: string | null = null;
-      try {
-        localCurrentVersion = localStorage.getItem("bsf_current_version");
-      } catch (e) {
-        console.error("Failed to read bsf_current_version:", e);
-      }
+      const localCurrentVersion = readStorageString(
+        STORAGE_KEYS.CURRENT_VERSION
+      );
 
       // 4. Resolve initial values
       const initialVersion =
@@ -372,9 +455,7 @@ export default function Home() {
               },
             };
             setSavedDefaults(mergedDefaults);
-            try {
-              localStorage.setItem("bsf_user_defaults", JSON.stringify(mergedDefaults));
-            } catch {}
+            writeStorageJson(STORAGE_KEYS.USER_DEFAULTS, mergedDefaults);
 
             // If no URL settings were present and no active session storage, restore passage from DB
             if (!urlSettings.hasUrlSettings && !localPassage && dbPref.lastBookId) {
@@ -402,34 +483,23 @@ export default function Home() {
   // Sync active session formatting options to localStorage
   useEffect(() => {
     if (!isHydrated) return;
-    try {
-      localStorage.setItem("bsf_current_options", JSON.stringify(options));
-    } catch (e) {
-      console.error("Failed to save current options to localStorage:", e);
-    }
+    writeStorageJson(STORAGE_KEYS.CURRENT_OPTIONS, options);
   }, [options, isHydrated]);
 
   // Sync active Bible version to localStorage
   useEffect(() => {
     if (!isHydrated) return;
-    try {
-      localStorage.setItem("bsf_current_version", versionId);
-    } catch (e) {
-      console.error("Failed to save current version to localStorage:", e);
-    }
+    writeStorageString(STORAGE_KEYS.CURRENT_VERSION, versionId);
   }, [versionId, isHydrated]);
 
   // Sync active Scripture passage to localStorage & database
   useEffect(() => {
     if (!isHydrated) return;
-    try {
-      localStorage.setItem(
-        "bsf_last_passage",
-        JSON.stringify({ bookId, chapterStart, chapterEnd })
-      );
-    } catch (e) {
-      console.error("Failed to save last passage to localStorage:", e);
-    }
+    writeStorageJson(STORAGE_KEYS.LAST_PASSAGE, {
+      bookId,
+      chapterStart,
+      chapterEnd,
+    });
 
     // Debounced sync to database if logged in
     if (user) {
@@ -455,11 +525,7 @@ export default function Home() {
       options: { ...options },
     };
     setSavedDefaults(newDefaults);
-    try {
-      localStorage.setItem("bsf_user_defaults", JSON.stringify(newDefaults));
-    } catch (e) {
-      console.error("Failed to save defaults to localStorage:", e);
-    }
+    writeStorageJson(STORAGE_KEYS.USER_DEFAULTS, newDefaults);
 
     if (user) {
       try {
@@ -484,11 +550,7 @@ export default function Home() {
   // Handle resetting active formatting options to saved personal defaults
   const handleResetDefaults = () => {
     setOptions({ ...savedDefaults.options });
-    try {
-      localStorage.setItem("bsf_current_options", JSON.stringify(savedDefaults.options));
-    } catch (e) {
-      console.error("Failed to update localStorage:", e);
-    }
+    writeStorageJson(STORAGE_KEYS.CURRENT_OPTIONS, savedDefaults.options);
   };
 
   // Handle saving current Bible version as default
@@ -498,11 +560,7 @@ export default function Home() {
       version: versionId,
     };
     setSavedDefaults(newDefaults);
-    try {
-      localStorage.setItem("bsf_user_defaults", JSON.stringify(newDefaults));
-    } catch (e) {
-      console.error("Failed to save default version to localStorage:", e);
-    }
+    writeStorageJson(STORAGE_KEYS.USER_DEFAULTS, newDefaults);
 
     if (user) {
       try {
@@ -527,11 +585,7 @@ export default function Home() {
   // Handle resetting active Bible version to saved default version
   const handleResetDefaultVersion = () => {
     setVersionId(savedDefaults.version);
-    try {
-      localStorage.setItem("bsf_current_version", savedDefaults.version);
-    } catch (e) {
-      console.error("Failed to update localStorage:", e);
-    }
+    writeStorageString(STORAGE_KEYS.CURRENT_VERSION, savedDefaults.version);
   };
 
   // Handle book selection change
@@ -879,14 +933,14 @@ export default function Home() {
                 onChange={(e) => handleBookChange(e.target.value)}
               >
                 <optgroup label="Old Testament">
-                  {BIBLE_BOOKS.filter((b) => b.testament === "OT").map((b) => (
+                  {OT_BOOKS.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name} ({b.numChapters} chapters)
                     </option>
                   ))}
                 </optgroup>
                 <optgroup label="New Testament">
-                  {BIBLE_BOOKS.filter((b) => b.testament === "NT").map((b) => (
+                  {NT_BOOKS.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name} ({b.numChapters} chapters)
                     </option>
@@ -1075,13 +1129,11 @@ export default function Home() {
                   setOptions({ ...options, fontName: e.target.value })
                 }
               >
-                <option value="Arial">Arial</option>
-                <option value="Georgia">Georgia</option>
-                <option value="Times New Roman">Times New Roman</option>
-                <option value="Roboto">Roboto</option>
-                <option value="Trebuchet MS">Trebuchet MS</option>
-                <option value="Verdana">Verdana</option>
-                <option value="Courier New">Courier New</option>
+                {SUPPORTED_FONT_FAMILIES.map((font) => (
+                  <option key={font} value={font}>
+                    {font}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1369,50 +1421,14 @@ export default function Home() {
                             )}
                           </div>
                         </div>
-                        <div className="doc-history-actions">
-                          <button
-                            type="button"
-                            className={`btn-copy-link ${
-                              copiedKey === rowKey ? "copied" : ""
-                            }`}
-                            onClick={() =>
-                              handleCopyBsfLink(
-                                rowKey,
-                                item.versionAbbr,
-                                item.bookId,
-                                item.chapterStart,
-                                item.chapterEnd,
-                                item.options
-                              )
-                            }
-                            title="Copy a BSF link pre-filled with this passage and formatting"
-                          >
-                            {copiedKey === rowKey ? (
-                              <>
-                                <Check size={13} /> Copied URL
-                              </>
-                            ) : (
-                              <>
-                                <Link2 size={13} /> Copy BSF link
-                              </>
-                            )}
-                          </button>
-
-                          {item.docId && (
-                            <button
-                              type="button"
-                              className="btn-trash-doc"
-                              disabled={Boolean(trashingKeys[rowKey])}
-                              onClick={() =>
-                                handleTrashDocs(rowKey, [item.docId!])
-                              }
-                              title="Move to Google Drive trash"
-                              aria-label="Move to Google Drive trash"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
+                        <DocHistoryRowActions
+                          rowKey={rowKey}
+                          item={item}
+                          copiedKey={copiedKey}
+                          isTrashing={Boolean(trashingKeys[rowKey])}
+                          onCopyLink={handleCopyBsfLink}
+                          onTrash={handleTrashDocs}
+                        />
                       </div>
 
                       {isExpanded && group.earlier.length > 0 && (
@@ -1485,52 +1501,14 @@ export default function Home() {
                                   )}
                                 </div>
 
-                                <div className="doc-history-actions">
-                                  <button
-                                    type="button"
-                                    className={`btn-copy-link ${
-                                      copiedKey === earlierKey ? "copied" : ""
-                                    }`}
-                                    onClick={() =>
-                                      handleCopyBsfLink(
-                                        earlierKey,
-                                        earlierItem.versionAbbr,
-                                        earlierItem.bookId,
-                                        earlierItem.chapterStart,
-                                        earlierItem.chapterEnd,
-                                        earlierItem.options
-                                      )
-                                    }
-                                    title="Copy a BSF link pre-filled with this passage and formatting"
-                                  >
-                                    {copiedKey === earlierKey ? (
-                                      <>
-                                        <Check size={13} /> Copied URL
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Link2 size={13} /> Copy BSF link
-                                      </>
-                                    )}
-                                  </button>
-
-                                  {earlierItem.docId && (
-                                    <button
-                                      type="button"
-                                      className="btn-trash-doc"
-                                      disabled={Boolean(trashingKeys[earlierKey])}
-                                      onClick={() =>
-                                        handleTrashDocs(earlierKey, [
-                                          earlierItem.docId!,
-                                        ])
-                                      }
-                                      title="Move to Google Drive trash"
-                                      aria-label="Move to Google Drive trash"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  )}
-                                </div>
+                                <DocHistoryRowActions
+                                  rowKey={earlierKey}
+                                  item={earlierItem}
+                                  copiedKey={copiedKey}
+                                  isTrashing={Boolean(trashingKeys[earlierKey])}
+                                  onCopyLink={handleCopyBsfLink}
+                                  onTrash={handleTrashDocs}
+                                />
                               </div>
                             );
                           })}
@@ -1613,49 +1591,14 @@ export default function Home() {
                         </div>
                         <div className="doc-history-meta">{metaLine}</div>
                       </div>
-                      <div className="doc-history-actions">
-                        <button
-                          type="button"
-                          className={`btn-copy-link ${
-                            copiedKey === modalKey ? "copied" : ""
-                          }`}
-                          onClick={() =>
-                            handleCopyBsfLink(
-                              modalKey,
-                              item.versionAbbr,
-                              item.bookId,
-                              item.chapterStart,
-                              item.chapterEnd,
-                              item.options
-                            )
-                          }
-                          title="Copy a BSF link pre-filled with this passage and formatting"
-                        >
-                          {copiedKey === modalKey ? (
-                            <>
-                              <Check size={13} /> Copied URL
-                            </>
-                          ) : (
-                            <>
-                              <Link2 size={13} /> Copy BSF link
-                            </>
-                          )}
-                        </button>
-                        {item.docId && (
-                          <button
-                            type="button"
-                            className="btn-trash-doc"
-                            disabled={Boolean(trashingKeys[modalKey])}
-                            onClick={() =>
-                              handleTrashDocs(modalKey, [item.docId!])
-                            }
-                            title="Move to Google Drive trash"
-                            aria-label="Move to Google Drive trash"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
+                      <DocHistoryRowActions
+                        rowKey={modalKey}
+                        item={item}
+                        copiedKey={copiedKey}
+                        isTrashing={Boolean(trashingKeys[modalKey])}
+                        onCopyLink={handleCopyBsfLink}
+                        onTrash={handleTrashDocs}
+                      />
                     </div>
                   );
                 })

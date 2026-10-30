@@ -19,6 +19,88 @@ export interface FormatOptions {
   subfolder?: string;
 }
 
+export const DEFAULT_VERSION = "ESV";
+
+export const SUPPORTED_FONT_FAMILIES = [
+  "Arial",
+  "Georgia",
+  "Times New Roman",
+  "Roboto",
+  "Trebuchet MS",
+  "Verdana",
+  "Courier New",
+] as const;
+
+export const FONT_FAMILY_CSS_MAP: Record<string, string> = {
+  Arial: "Arial, sans-serif",
+  Georgia: "Georgia, serif",
+  "Times New Roman": '"Times New Roman", Times, serif',
+  Roboto: "var(--font-sans), sans-serif",
+  "Trebuchet MS": '"Trebuchet MS", sans-serif',
+  Verdana: "Verdana, sans-serif",
+  "Courier New": '"Courier New", monospace',
+};
+
+export const VALID_LINE_SPACINGS = [1, 1.15, 1.5, 2] as const;
+
+export const DEFAULT_FORMAT_OPTIONS: FormatOptions = {
+  chapterHeaders: true,
+  chapterPageBreaks: true,
+  verseNumbers: true,
+  sectionHeadings: false,
+  titlePage: false,
+  fontName: "Arial",
+  fontSize: 11,
+  lineSpacing: 2,
+};
+
+/**
+ * Validates and normalizes user-supplied FormatOptions against supported values.
+ */
+export function sanitizeFormatOptions(
+  raw: Partial<FormatOptions> | null | undefined,
+  fallback: FormatOptions = DEFAULT_FORMAT_OPTIONS
+): FormatOptions {
+  if (!raw || typeof raw !== "object") return { ...fallback };
+  const validFontsSet = new Set<string>(SUPPORTED_FONT_FAMILIES);
+  const validSpacingSet = new Set<number>(VALID_LINE_SPACINGS);
+  return {
+    chapterHeaders:
+      typeof raw.chapterHeaders === "boolean"
+        ? raw.chapterHeaders
+        : fallback.chapterHeaders,
+    chapterPageBreaks:
+      typeof raw.chapterPageBreaks === "boolean"
+        ? raw.chapterPageBreaks
+        : fallback.chapterPageBreaks,
+    verseNumbers:
+      typeof raw.verseNumbers === "boolean"
+        ? raw.verseNumbers
+        : fallback.verseNumbers,
+    sectionHeadings:
+      typeof raw.sectionHeadings === "boolean"
+        ? raw.sectionHeadings
+        : Boolean(fallback.sectionHeadings),
+    titlePage:
+      typeof raw.titlePage === "boolean" ? raw.titlePage : fallback.titlePage,
+    fontName:
+      typeof raw.fontName === "string" && validFontsSet.has(raw.fontName)
+        ? raw.fontName
+        : fallback.fontName,
+    fontSize:
+      typeof raw.fontSize === "number" &&
+      raw.fontSize >= 8 &&
+      raw.fontSize <= 24
+        ? raw.fontSize
+        : fallback.fontSize,
+    lineSpacing:
+      typeof raw.lineSpacing === "number" &&
+      validSpacingSet.has(raw.lineSpacing)
+        ? raw.lineSpacing
+        : fallback.lineSpacing,
+  };
+}
+
 export type TextAlignment = "left" | "center" | "right" | "justify";
 
 export interface TextRun {
@@ -337,8 +419,32 @@ export const BIBLE_BOOKS: BookInfo[] = [
   { id: "REV", name: "Revelation", numChapters: 22, testament: "NT" },
 ];
 
+export const OT_BOOKS: BookInfo[] = BIBLE_BOOKS.filter(
+  (b) => b.testament === "OT"
+);
+
+export const NT_BOOKS: BookInfo[] = BIBLE_BOOKS.filter(
+  (b) => b.testament === "NT"
+);
+
+const BOOK_BY_ID_MAP = new Map<string, BookInfo>(
+  BIBLE_BOOKS.map((b) => [b.id.toUpperCase(), b])
+);
+
+const BOOK_BY_NAME_MAP = new Map<string, BookInfo>(
+  BIBLE_BOOKS.map((b) => [b.name.toLowerCase(), b])
+);
+
 export function getBookById(bookId: string): BookInfo | undefined {
-  return BIBLE_BOOKS.find((b) => b.id.toUpperCase() === bookId.toUpperCase());
+  return BOOK_BY_ID_MAP.get(bookId.trim().toUpperCase());
+}
+
+export function getBookByNameOrId(input: string): BookInfo | undefined {
+  const cleaned = input.trim();
+  return (
+    BOOK_BY_ID_MAP.get(cleaned.toUpperCase()) ||
+    BOOK_BY_NAME_MAP.get(cleaned.toLowerCase())
+  );
 }
 
 export function getBookChapters(bookId: string): number[] {
