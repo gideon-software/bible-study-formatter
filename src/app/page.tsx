@@ -1637,6 +1637,10 @@ export default function Home() {
             Gideon Software Solutions
           </a>
           {" • "}
+          <a href="/privacy">Privacy Policy</a>
+          {" • "}
+          <a href="/terms">Terms of Service</a>
+          {" • "}
           <a href="mailto:gideonsoftwaresolutions@gmail.com?subject=Bible%20Study%20Formatter%20Issue%20Report">
             Report an issue
           </a>

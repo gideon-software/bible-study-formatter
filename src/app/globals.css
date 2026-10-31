@@ -1567,3 +1567,104 @@ body {
     padding: 1rem 0.85rem;
   }
 }
+
+/* ==========================================================================
+   Legal Pages (Privacy Policy & Terms of Service)
+   ========================================================================== */
+.legal-page-container {
+  max-width: 860px;
+}
+
+.legal-content {
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--text-main);
+}
+
+.legal-effective-date {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-glass);
+  padding-bottom: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.legal-content section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.legal-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+  margin-top: 0.5rem;
+}
+
+.legal-content p {
+  color: var(--text-main);
+}
+
+.legal-content ul {
+  padding-left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.legal-content li {
+  color: var(--text-main);
+}
+
+.legal-content a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.legal-content a:hover {
+  color: var(--primary-hover);
+}
+
+.legal-content code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+}
+
+.legal-callout {
+  padding: 1rem 1.25rem;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+}
+
+.legal-contact-card {
+  padding: 1rem 1.25rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  line-height: 1.8;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .legal-content {
+    padding: 1.5rem 1.25rem;
+    gap: 1.25rem;
+  }
+
+  .legal-content h2 {
+    font-size: 1.15rem;
+  }
+}
