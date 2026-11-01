@@ -140,6 +140,12 @@ function describeOptionsDiff(
   ) {
     diffs.push(`${itemOpts.lineSpacing}x spacing`);
   }
+  if (
+    (itemOpts.pageMargins ?? 1) !== (refOpts.pageMargins ?? 1) &&
+    itemOpts.pageMargins !== undefined
+  ) {
+    diffs.push(`${itemOpts.pageMargins}" margins`);
+  }
 
   return diffs.length > 0 ? diffs.join(" • ") : null;
 }
@@ -321,7 +327,8 @@ export default function Home() {
       options.titlePage !== savedDefaults.options.titlePage ||
       options.fontName !== savedDefaults.options.fontName ||
       options.fontSize !== savedDefaults.options.fontSize ||
-      options.lineSpacing !== savedDefaults.options.lineSpacing
+      options.lineSpacing !== savedDefaults.options.lineSpacing ||
+      (options.pageMargins ?? 1) !== (savedDefaults.options.pageMargins ?? 1)
     );
   }, [options, savedDefaults.options]);
 
@@ -1151,7 +1158,7 @@ export default function Home() {
               />
             </div>
 
-            <div className="field-group full-width">
+            <div className="field-group">
               <label className="field-label">Line Spacing</label>
               <select
                 className="field-select"
@@ -1160,10 +1167,27 @@ export default function Home() {
                   setOptions({ ...options, lineSpacing: Number(e.target.value) })
                 }
               >
-                <option value={1.0}>1.0 (Single spaced)</option>
+                <option value={1.0}>1.0 (Single)</option>
                 <option value={1.15}>1.15 (Standard)</option>
                 <option value={1.5}>1.5 (Expanded)</option>
-                <option value={2.0}>2.0 (Double spaced - ideal for notes)</option>
+                <option value={2.0}>2.0 (Double)</option>
+              </select>
+            </div>
+
+            <div className="field-group">
+              <label className="field-label">Page Margins</label>
+              <select
+                className="field-select"
+                value={options.pageMargins ?? 1.0}
+                onChange={(e) =>
+                  setOptions({ ...options, pageMargins: Number(e.target.value) })
+                }
+              >
+                <option value={0.5}>0.5&quot; (Narrow)</option>
+                <option value={0.75}>0.75&quot; (Moderate)</option>
+                <option value={1.0}>1.0&quot; (Standard)</option>
+                <option value={1.25}>1.25&quot; (Wide)</option>
+                <option value={1.5}>1.5&quot; (Extra wide)</option>
               </select>
             </div>
           </div>
@@ -1209,6 +1233,7 @@ export default function Home() {
               fontFamily: FONT_FAMILY_MAP[options.fontName] || options.fontName,
               fontSize: `${options.fontSize}pt`,
               lineHeight: options.lineSpacing,
+              padding: `${(options.pageMargins ?? 1) * 2.25}rem`,
             }}
           >
             {/* Title Page Simulation */}

@@ -2,6 +2,7 @@ import {
   BIBLE_BOOKS,
   SUPPORTED_VERSIONS,
   SUPPORTED_FONT_FAMILIES,
+  VALID_PAGE_MARGINS,
   FormatOptions,
   getBookByNameOrId,
 } from "./books";
@@ -145,6 +146,16 @@ export function parseUrlSettings(search: string | URLSearchParams): ParsedUrlSet
     }
   }
 
+  // Page margins (inches)
+  const rawMargins = params.get("margins") || params.get("margin");
+  if (rawMargins) {
+    const m = parseFloat(rawMargins);
+    if ((VALID_PAGE_MARGINS as readonly number[]).includes(m)) {
+      optionsObj.pageMargins = m;
+      hasFormatOption = true;
+    }
+  }
+
   // Switches
   const headers = parseBoolParam(params.get("headers"));
   if (headers !== undefined) {
@@ -228,6 +239,9 @@ export function buildShareableUrl(params: {
     }
     if (opt.lineSpacing !== undefined) {
       searchParams.set("spacing", String(opt.lineSpacing));
+    }
+    if (opt.pageMargins !== undefined) {
+      searchParams.set("margins", String(opt.pageMargins));
     }
   }
 

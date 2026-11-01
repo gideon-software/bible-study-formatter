@@ -16,6 +16,7 @@ export interface FormatOptions {
   fontName: string;
   fontSize: number;
   lineSpacing: number; // e.g. 1.0, 1.15, 1.5, 2.0
+  pageMargins?: number; // in inches, e.g. 0.5, 0.75, 1.0, 1.25, 1.5 (defaults to 1.0)
   subfolder?: string;
 }
 
@@ -43,6 +44,8 @@ export const FONT_FAMILY_CSS_MAP: Record<string, string> = {
 
 export const VALID_LINE_SPACINGS = [1, 1.15, 1.5, 2] as const;
 
+export const VALID_PAGE_MARGINS = [0.5, 0.75, 1, 1.25, 1.5] as const;
+
 export const DEFAULT_FORMAT_OPTIONS: FormatOptions = {
   chapterHeaders: true,
   chapterPageBreaks: true,
@@ -52,6 +55,7 @@ export const DEFAULT_FORMAT_OPTIONS: FormatOptions = {
   fontName: "Arial",
   fontSize: 11,
   lineSpacing: 2,
+  pageMargins: 1,
 };
 
 /**
@@ -64,6 +68,7 @@ export function sanitizeFormatOptions(
   if (!raw || typeof raw !== "object") return { ...fallback };
   const validFontsSet = new Set<string>(SUPPORTED_FONT_FAMILIES);
   const validSpacingSet = new Set<number>(VALID_LINE_SPACINGS);
+  const validMarginsSet = new Set<number>(VALID_PAGE_MARGINS);
   return {
     chapterHeaders:
       typeof raw.chapterHeaders === "boolean"
@@ -98,6 +103,11 @@ export function sanitizeFormatOptions(
       validSpacingSet.has(raw.lineSpacing)
         ? raw.lineSpacing
         : fallback.lineSpacing,
+    pageMargins:
+      typeof raw.pageMargins === "number" &&
+      validMarginsSet.has(raw.pageMargins)
+        ? raw.pageMargins
+        : (fallback.pageMargins ?? 1),
   };
 }
 

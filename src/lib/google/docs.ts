@@ -23,14 +23,16 @@ export function buildGoogleDocsRequests(
 ): docs_v1.Schema$Request[] {
   const requests: docs_v1.Schema$Request[] = [];
 
-  // 1. Set 1-inch margins on the whole document
+  // 1. Set page margins on the whole document (default 1.0 inch = 72 PT)
+  const marginInches = options.pageMargins ?? 1.0;
+  const marginPt = Math.round(marginInches * 72);
   requests.push({
     updateDocumentStyle: {
       documentStyle: {
-        marginTop: { magnitude: 72, unit: "PT" },
-        marginBottom: { magnitude: 72, unit: "PT" },
-        marginLeft: { magnitude: 72, unit: "PT" },
-        marginRight: { magnitude: 72, unit: "PT" },
+        marginTop: { magnitude: marginPt, unit: "PT" },
+        marginBottom: { magnitude: marginPt, unit: "PT" },
+        marginLeft: { magnitude: marginPt, unit: "PT" },
+        marginRight: { magnitude: marginPt, unit: "PT" },
       },
       fields: "marginTop,marginBottom,marginLeft,marginRight",
     },
@@ -206,6 +208,24 @@ export function buildGoogleDocsRequests(
       insertText: {
         location: { index: 1 },
         text: fullText,
+      },
+    });
+
+    // Apply Section Style margins across the document body
+    // (Google Docs editor renders page margins based on SectionStyle)
+    requests.push({
+      updateSectionStyle: {
+        range: {
+          startIndex: 1,
+          endIndex: fullText.length + 1,
+        },
+        sectionStyle: {
+          marginTop: { magnitude: marginPt, unit: "PT" },
+          marginBottom: { magnitude: marginPt, unit: "PT" },
+          marginLeft: { magnitude: marginPt, unit: "PT" },
+          marginRight: { magnitude: marginPt, unit: "PT" },
+        },
+        fields: "marginTop,marginBottom,marginLeft,marginRight",
       },
     });
 
