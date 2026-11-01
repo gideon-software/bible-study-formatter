@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   OT_BOOKS,
   NT_BOOKS,
@@ -295,7 +295,9 @@ export default function Home() {
 
   // Generation status & document history
   const [isGenerating, setIsGenerating] = useState(false);
-  const [progress, setProgress] = useState<number | null>(null);
+  const [showInFlightRow, setShowInFlightRow] = useState(false);
+  const inFlightTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [progress, setProgress] = useState<number>(0);
   const [statusMessage, setStatusMessage] = useState("");
   const [createdDoc, setCreatedDoc] = useState<{
     id: string;
@@ -643,17 +645,25 @@ export default function Home() {
     }
 
     setIsGenerating(true);
-    setProgress(null); // indeterminate initially
-    setStatusMessage("Connecting to Google Docs API...");
+    setProgress(5);
+    setStatusMessage("Loading Scripture...");
     setErrorMsg(null);
     setErrorDetails(null);
     setShowErrorDetails(false);
     setCreatedDoc(null);
 
-    try {
-      setStatusMessage("Fetching Scripture and applying typography rules...");
-      setProgress(40);
+    // Hybrid loading feel: 3+ chapters shows immediately; 1-2 chapters waits 750ms to prevent visual flash
+    const totalChapters = chapterEnd - chapterStart + 1;
+    if (totalChapters >= 3) {
+      setShowInFlightRow(true);
+    } else {
+      setShowInFlightRow(false);
+      inFlightTimerRef.current = setTimeout(() => {
+        setShowInFlightRow(true);
+      }, 750);
+    }
 
+    try {
       const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -668,9 +678,8 @@ export default function Home() {
         }),
       });
 
-      const result = await response.json();
-
       if (!response.ok) {
+        const result = await response.json();
         if (result.needsAuth) {
           // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           window.location.href = "/api/auth/google/login";
@@ -684,6 +693,71 @@ export default function Home() {
         return;
       }
 
+      // Read NDJSON streaming progress response
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Unable to read streaming response from server.");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completedResult: {
+        docId: string;
+        docUrl: string;
+        docName: string;
+      } | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const data = JSON.parse(trimmed);
+            if (data.type === "progress") {
+              if (typeof data.progress === "number") {
+                setProgress(data.progress);
+              }
+              if (data.message) {
+                setStatusMessage(data.message);
+              }
+            } else if (data.type === "complete") {
+              completedResult = data;
+            } else if (data.type === "error") {
+              if (data.needsAuth) {
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                window.location.href = "/api/auth/google/login";
+                return;
+              }
+              setErrorMsg(data.message || data.error || "Generation failed");
+              if (data.details) setErrorDetails(data.details);
+              setStatusMessage("");
+              return;
+            }
+          } catch (parseErr) {
+            console.warn("Failed to parse stream chunk:", trimmed, parseErr);
+          }
+        }
+      }
+
+      // Process any trailing line in buffer
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer.trim());
+          if (data.type === "complete") completedResult = data;
+        } catch {}
+      }
+
+      if (!completedResult || !completedResult.docId) {
+        throw new Error("Failed to receive completed document from server.");
+      }
+
+      const result = completedResult;
       setProgress(100);
       setStatusMessage("");
       const newDocSnapshot = {
@@ -716,6 +790,11 @@ export default function Home() {
       setErrorMsg(msg);
       setStatusMessage("");
     } finally {
+      if (inFlightTimerRef.current) {
+        clearTimeout(inFlightTimerRef.current);
+        inFlightTimerRef.current = null;
+      }
+      setShowInFlightRow(false);
       setIsGenerating(false);
     }
   };
@@ -1315,7 +1394,7 @@ export default function Home() {
           </div>
 
           {/* Card 2: Recent Google Docs */}
-          {(groupedRecentDocs.length > 0 || isGenerating || errorMsg) && (
+          {(groupedRecentDocs.length > 0 || showInFlightRow || errorMsg) && (
             <div className="glass-panel recent-docs-panel">
               <div className="recent-docs-header">
                 <h2 className="section-title recent-docs-title">
@@ -1379,10 +1458,10 @@ export default function Home() {
                 </div>
               )}
 
-              {(isGenerating || groupedRecentDocs.length > 0) && (
+              {(showInFlightRow || groupedRecentDocs.length > 0) && (
                 <div className="recent-docs-list">
                   {/* In-Flight Active Generation Placeholder */}
-                  {isGenerating && (
+                  {showInFlightRow && (
                     <div className="doc-history-group in-flight-group">
                       <div className="doc-history-row in-flight-row">
                         <div className="doc-history-info" style={{ width: "100%" }}>
@@ -1401,8 +1480,8 @@ export default function Home() {
                           )}
                           <div className="progress-track" style={{ margin: "0.45rem 0 0.15rem 0" }}>
                             <div
-                              className={`progress-bar-fill ${progress === null ? "indeterminate" : ""}`}
-                              style={{ width: progress !== null ? `${progress}%` : undefined }}
+                              className="progress-bar-fill"
+                              style={{ width: `${Math.max(progress, 5)}%` }}
                             />
                           </div>
                         </div>

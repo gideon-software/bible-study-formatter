@@ -782,8 +782,20 @@ body {
 
 .progress-bar-fill {
   height: 100%;
-  background: var(--primary-gradient);
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6, #d946ef, #6366f1);
+  background-size: 200% 100%;
+  animation: progressPulse 2.5s linear infinite;
+  transition: width 0.35s ease-out;
+  border-radius: var(--radius-full);
+}
+
+@keyframes progressPulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
 }
 
 .progress-bar-fill.indeterminate {

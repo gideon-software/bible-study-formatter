@@ -160,169 +160,265 @@ export async function POST(request: Request) {
     }
     lockAcquired = true;
 
-    // 4. Fetch and parse each chapter (using batch-loaded cache Map first)
-    const chapters: ParsedChapter[] = [];
-    let uncachedDownloadedCount = 0;
-
-    for (let ch = chapterStart; ch <= chapterEnd; ch++) {
-      const cacheKey = `${version}/${bookId}/${ch}`;
-      let parsedCh: ParsedChapter | null =
-        cachedChapterMap.get(cacheKey) || null;
-
-      // If not cached, fetch from provider with full structural options so cache is reusable
-      if (!parsedCh) {
-        uncachedDownloadedCount++;
-        const selectedVer = SUPPORTED_VERSIONS.find(
-          (v) => String(v.id).toUpperCase() === version.toUpperCase()
-        );
-
-        const fullCacheOptions: FormatOptions = {
-          ...options,
-          chapterHeaders: true,
-          sectionHeadings: true,
-          verseNumbers: true,
-        };
-
-        if (selectedVer?.provider === "net") {
-          parsedCh = await fetchNetChapter(bookId, ch, fullCacheOptions);
-        } else if (selectedVer?.provider === "apibible") {
-          parsedCh = await fetchApiBibleChapter(bookId, ch, version, fullCacheOptions);
-        } else {
-          parsedCh = await fetchEsvChapter(bookId, ch, fullCacheOptions);
-        }
-
-        // Store into Neon DB cache
-        // Crossway policy: "You may not locally store more than 500 verses... You can cache up to 500 verses"
-        // We enforce a rolling cache of max 10 chapters for ESV to guarantee compliance.
-        if (db && parsedCh) {
-          try {
-            await db
-              .insert(bibleCache)
-              .values({
-                passageKey: cacheKey,
-                contentJson: parsedCh,
-              })
-              .onConflictDoNothing();
-
-            // Rolling cache pruning for ESV (single batched DELETE)
-            if (version === "ESV") {
-              const esvEntries = await db
-                .select({ id: bibleCache.id })
-                .from(bibleCache)
-                .where(sql`${bibleCache.passageKey} LIKE 'ESV/%'`)
-                .orderBy(desc(bibleCache.createdAt));
-
-              if (esvEntries.length > 10) {
-                const idsToPrune = esvEntries.slice(10).map((e) => e.id);
-                await db
-                  .delete(bibleCache)
-                  .where(inArray(bibleCache.id, idsToPrune));
-              }
-            }
-          } catch (cacheWriteErr) {
-            console.warn("[Cache] Write error:", cacheWriteErr);
-          }
-        }
-      }
-
-      chapters.push(applyOptionsToChapter(parsedCh, options));
-    }
-
-    // 5. Build document title and create Google Doc
-    const docTitle = getDocTitle(bookId, chapterStart, chapterEnd, version);
+    // 4. Authenticate client with Google OAuth before streaming begins
     const { client: authClient, refreshedTokens } = await getAuthenticatedClient({
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
       expiryDate: session.expiryDate,
     });
 
-    const docResult = await createGoogleDocWithAuth(
-      authClient,
-      docTitle,
-      chapters,
-      options,
-      version
-    );
-
-    const durationMs = Date.now() - startTime;
-
-    // 6. Disambiguate any previous doc for the same passage/version in Google Drive, then log execution
-    if (db) {
-      if (userEmail) {
-        try {
-          const prevDocs = await db
-            .select({
-              docId: executions.docId,
-              createdAt: executions.createdAt,
-            })
-            .from(executions)
-            .where(
-              and(
-                ilike(executions.userEmail, userEmail.trim()),
-                eq(executions.versionAbbr, version),
-                eq(executions.bookId, bookId),
-                eq(executions.chapterStart, chapterStart),
-                eq(executions.chapterEnd, chapterEnd),
-                isNotNull(executions.docUrl),
-                isNotNull(executions.docId)
-              )
-            )
-            .orderBy(desc(executions.createdAt))
-            .limit(1);
-
-          if (prevDocs.length > 0 && prevDocs[0].docId) {
-            const suffix = formatDriveTimestampSuffix(
-              new Date(prevDocs[0].createdAt),
-              timeZone
-            );
-            const renamedTitle = `${docTitle} ${suffix}`;
-            await renameGoogleDriveFile(
-              authClient,
-              prevDocs[0].docId,
-              renamedTitle
-            );
+    // 5. Stream real-time progress and final document result (NDJSON)
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (data: Record<string, unknown>) => {
+          try {
+            controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+          } catch {
+            // Client closed stream early
           }
-        } catch (renameErr) {
-          console.warn(
-            "[Drive] Non-fatal error renaming previous duplicate doc:",
-            renameErr
+        };
+
+        try {
+          send({
+            type: "progress",
+            progress: 5,
+            message: "Loading Scripture...",
+          });
+
+          const chapters: ParsedChapter[] = [];
+          let uncachedDownloadedCount = 0;
+          const totalChapters = chapterEnd - chapterStart + 1;
+
+          for (let ch = chapterStart; ch <= chapterEnd; ch++) {
+            const cacheKey = `${version}/${bookId}/${ch}`;
+            let parsedCh: ParsedChapter | null = cachedChapterMap.get(cacheKey) || null;
+
+            // If not cached, fetch from provider with full structural options so cache is reusable
+            if (!parsedCh) {
+              uncachedDownloadedCount++;
+              const selectedVer = SUPPORTED_VERSIONS.find(
+                (v) => String(v.id).toUpperCase() === version.toUpperCase()
+              );
+
+              const fullCacheOptions: FormatOptions = {
+                ...options,
+                chapterHeaders: true,
+                sectionHeadings: true,
+                verseNumbers: true,
+              };
+
+              if (selectedVer?.provider === "net") {
+                parsedCh = await fetchNetChapter(bookId, ch, fullCacheOptions);
+              } else if (selectedVer?.provider === "apibible") {
+                parsedCh = await fetchApiBibleChapter(bookId, ch, version, fullCacheOptions);
+              } else {
+                parsedCh = await fetchEsvChapter(bookId, ch, fullCacheOptions);
+              }
+
+              // Store into Neon DB cache
+              // Crossway policy: "You may not locally store more than 500 verses... You can cache up to 500 verses"
+              // We enforce a rolling cache of max 10 chapters for ESV to guarantee compliance.
+              if (db && parsedCh) {
+                try {
+                  await db
+                    .insert(bibleCache)
+                    .values({
+                      passageKey: cacheKey,
+                      contentJson: parsedCh,
+                    })
+                    .onConflictDoNothing();
+
+                  // Rolling cache pruning for ESV (single batched DELETE)
+                  if (version === "ESV") {
+                    const esvEntries = await db
+                      .select({ id: bibleCache.id })
+                      .from(bibleCache)
+                      .where(sql`${bibleCache.passageKey} LIKE 'ESV/%'`)
+                      .orderBy(desc(bibleCache.createdAt));
+
+                    if (esvEntries.length > 10) {
+                      const idsToPrune = esvEntries.slice(10).map((e) => e.id);
+                      await db
+                        .delete(bibleCache)
+                        .where(inArray(bibleCache.id, idsToPrune));
+                    }
+                  }
+                } catch (cacheWriteErr) {
+                  console.warn("[Cache] Write error:", cacheWriteErr);
+                }
+              }
+            }
+
+            if (!parsedCh) {
+              throw new Error(`Failed to load Scripture for chapter ${ch}`);
+            }
+
+            chapters.push(applyOptionsToChapter(parsedCh, options));
+
+            // Smooth progress from 5% to 80% based on chapters completed
+            const doneRatio = (ch - chapterStart + 1) / totalChapters;
+            const currentPct = Math.round(5 + doneRatio * 75);
+            send({
+              type: "progress",
+              progress: currentPct,
+              message: "Loading Scripture...",
+            });
+          }
+
+          send({
+            type: "progress",
+            progress: 85,
+            message: "Creating your Google Doc...",
+          });
+
+          // Build document title and create Google Doc
+          const docTitle = getDocTitle(bookId, chapterStart, chapterEnd, version);
+          const docResult = await createGoogleDocWithAuth(
+            authClient,
+            docTitle,
+            chapters,
+            options,
+            version
           );
+
+          send({
+            type: "progress",
+            progress: 95,
+            message: "Creating your Google Doc...",
+          });
+
+          const durationMs = Date.now() - startTime;
+
+          // Disambiguate any previous doc for the same passage/version in Google Drive, then log execution
+          if (db) {
+            if (userEmail) {
+              try {
+                const prevDocs = await db
+                  .select({
+                    docId: executions.docId,
+                    createdAt: executions.createdAt,
+                  })
+                  .from(executions)
+                  .where(
+                    and(
+                      ilike(executions.userEmail, userEmail.trim()),
+                      eq(executions.versionAbbr, version),
+                      eq(executions.bookId, bookId),
+                      eq(executions.chapterStart, chapterStart),
+                      eq(executions.chapterEnd, chapterEnd),
+                      isNotNull(executions.docUrl),
+                      isNotNull(executions.docId)
+                    )
+                  )
+                  .orderBy(desc(executions.createdAt))
+                  .limit(1);
+
+                if (prevDocs.length > 0 && prevDocs[0].docId) {
+                  const suffix = formatDriveTimestampSuffix(
+                    new Date(prevDocs[0].createdAt),
+                    timeZone
+                  );
+                  const renamedTitle = `${docTitle} ${suffix}`;
+                  await renameGoogleDriveFile(
+                    authClient,
+                    prevDocs[0].docId,
+                    renamedTitle
+                  );
+                }
+              } catch (renameErr) {
+                console.warn(
+                  "[Drive] Non-fatal error renaming previous duplicate doc:",
+                  renameErr
+                );
+              }
+            }
+
+            try {
+              await db.insert(executions).values({
+                userEmail,
+                versionAbbr: version,
+                bookId,
+                bookName: book.name,
+                chapterStart,
+                chapterEnd,
+                docId: docResult.docId,
+                docUrl: docResult.docUrl,
+                optionsJson: options,
+                durationMs,
+              });
+            } catch (logErr) {
+              console.error("[DB] Execution log error:", logErr);
+            }
+          }
+
+          // Record rate limit events (doc generation + any uncached chapters downloaded)
+          await recordRateLimitEvents({
+            userEmail,
+            uncachedChaptersCount: uncachedDownloadedCount,
+          });
+
+          send({
+            type: "complete",
+            progress: 100,
+            success: true,
+            docId: docResult.docId,
+            docUrl: docResult.docUrl,
+            docName: docResult.docName,
+            durationMs,
+          });
+
+          controller.close();
+        } catch (streamErr: unknown) {
+          console.error("[Generate] Stream generation failure:", streamErr);
+          const details = streamErr instanceof Error ? streamErr.message : String(streamErr);
+
+          // Check if error is due to expired Google credentials
+          const isAuthError =
+            details.includes("invalid authentication credentials") ||
+            details.includes("invalid_grant") ||
+            details.includes("Invalid Credentials") ||
+            details.includes("Unauthorized") ||
+            (typeof streamErr === "object" &&
+              streamErr !== null &&
+              "code" in streamErr &&
+              (streamErr as { code: unknown }).code === 401);
+
+          if (!isAuthError) {
+            await sendAlert({
+              type: "api_error",
+              title: "Document Generation Failed",
+              details,
+            });
+          }
+
+          send({
+            type: "error",
+            error: isAuthError ? "Authentication required" : "Generation Failed",
+            message: isAuthError
+              ? "Your Google session has expired. Please sign in again."
+              : details || "An unexpected error occurred while creating your document.",
+            needsAuth: isAuthError,
+          });
+
+          controller.close();
+        } finally {
+          if (lockAcquired && userEmailForLock) {
+            releaseInFlightLock(userEmailForLock);
+          }
         }
-      }
-
-      try {
-        await db.insert(executions).values({
-          userEmail,
-          versionAbbr: version,
-          bookId,
-          bookName: book.name,
-          chapterStart,
-          chapterEnd,
-          docId: docResult.docId,
-          docUrl: docResult.docUrl,
-          optionsJson: options,
-          durationMs,
-        });
-      } catch (logErr) {
-        console.error("[DB] Execution log error:", logErr);
-      }
-    }
-
-    // Record rate limit events (doc generation + any uncached chapters downloaded)
-    await recordRateLimitEvents({
-      userEmail,
-      uncachedChaptersCount: uncachedDownloadedCount,
+      },
     });
 
-    const response = NextResponse.json({
-      success: true,
-      docId: docResult.docId,
-      docUrl: docResult.docUrl,
-      docName: docResult.docName,
-      durationMs,
+    const response = new NextResponse(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+      },
     });
 
-    // If Google OAuth tokens were refreshed, update signed session cookie
+    // If Google OAuth tokens were refreshed, update signed session cookie on response headers
     if (refreshedTokens) {
       setSessionCookie(response, {
         ...session,
