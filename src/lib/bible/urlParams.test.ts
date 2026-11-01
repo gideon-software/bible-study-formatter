@@ -82,6 +82,7 @@ describe("URL Parameters Parser", () => {
         fontName: "Georgia",
         fontSize: 12,
         lineSpacing: 1.5,
+        pageMargins: 0.75,
       },
     });
 
@@ -98,5 +99,6 @@ describe("URL Parameters Parser", () => {
     assert.strictEqual(parsed.options?.fontName, "Georgia");
     assert.strictEqual(parsed.options?.fontSize, 12);
     assert.strictEqual(parsed.options?.lineSpacing, 1.5);
+    assert.strictEqual(parsed.options?.pageMargins, 0.75);
   });
 });

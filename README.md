@@ -2,7 +2,7 @@
 
 A modern full-stack web application built with **Next.js 16 (App Router)**, **TypeScript**, **Drizzle ORM**, **Neon Serverless Postgres**, and the **Google Docs & Drive APIs**.
 
-It formats Scripture passages into cleanly styled Google Docs with customizable typography, 0.5" margins, superscript verse numbers, section headings, title pages, and poetic/liturgical formatting—saved directly into the user's personal Google Drive.
+It formats Scripture passages into cleanly styled Google Docs with customizable typography, adjustable page margins (0.5"–1.5", default 1.0"), superscript verse numbers, section headings, title pages, and poetic/liturgical formatting—saved directly into the user's personal Google Drive.
 
 ---
 

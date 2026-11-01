@@ -145,4 +145,54 @@ describe("Google Docs Request Builder", () => {
     const formatted = formatDriveTimestampSuffix(sampleDate, "America/New_York");
     assert.strictEqual(formatted, "[Oct 29 @ 6:12am]");
   });
+
+  it("converts custom pageMargins in inches to Google Docs PT magnitudes", () => {
+    const narrowRequests = buildGoogleDocsRequests(
+      [sampleChapter],
+      { ...options, pageMargins: 0.5 },
+      "John (ESV)",
+      "ESV"
+    );
+    const narrowMargin = narrowRequests.find((r) => r.updateDocumentStyle);
+    assert.strictEqual(
+      narrowMargin?.updateDocumentStyle?.documentStyle?.marginTop?.magnitude,
+      36
+    );
+    assert.strictEqual(
+      narrowMargin?.updateDocumentStyle?.documentStyle?.marginLeft?.magnitude,
+      36
+    );
+
+    const wideRequests = buildGoogleDocsRequests(
+      [sampleChapter],
+      { ...options, pageMargins: 1.5 },
+      "John (ESV)",
+      "ESV"
+    );
+    const wideMargin = wideRequests.find((r) => r.updateDocumentStyle);
+    assert.strictEqual(
+      wideMargin?.updateDocumentStyle?.documentStyle?.marginRight?.magnitude,
+      108
+    );
+
+    // Section style margins
+    const wideSectionMargin = wideRequests.find((r) => r.updateSectionStyle);
+    assert(wideSectionMargin, "Must include updateSectionStyle");
+    assert.strictEqual(
+      wideSectionMargin.updateSectionStyle?.sectionStyle?.marginLeft?.magnitude,
+      108
+    );
+    assert.strictEqual(
+      wideSectionMargin.updateSectionStyle?.sectionStyle?.marginRight?.magnitude,
+      108
+    );
+    assert.strictEqual(
+      wideSectionMargin.updateSectionStyle?.sectionStyle?.marginTop?.magnitude,
+      108
+    );
+    assert.strictEqual(
+      wideSectionMargin.updateSectionStyle?.sectionStyle?.marginBottom?.magnitude,
+      108
+    );
+  });
 });
