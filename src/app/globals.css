@@ -151,40 +151,142 @@ body {
   gap: 0.75rem;
 }
 
-/* Theme Segmented Control */
-.theme-segmented-control {
+/* Theme Mode Dropdown */
+.theme-dropdown-container {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-glass);
-  border-radius: var(--radius-full);
-  padding: 3px;
-  gap: 2px;
 }
 
-.theme-segment-btn {
+.theme-toggle-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-full);
-  border: none;
-  background: transparent;
+  border: 1px solid var(--border-glass);
+  background: var(--bg-surface);
   color: var(--text-subtle);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.15s ease;
+  outline: none;
 }
 
-.theme-segment-btn:hover {
+.theme-toggle-btn:hover {
   color: var(--text-main);
+  border-color: var(--primary);
   background: var(--bg-card-hover);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
 }
 
-.theme-segment-btn.active {
-  background: var(--primary);
-  color: #ffffff;
-  box-shadow: 0 2px 8px var(--primary-glow);
+.theme-toggle-btn.active {
+  color: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+.theme-toggle-btn:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
+}
+
+[data-theme="light"] .theme-toggle-btn {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #4b5563;
+}
+
+[data-theme="light"] .theme-toggle-btn:hover {
+  background: #f9fafb;
+  color: #111827;
+  border-color: #6366f1;
+}
+
+[data-theme="light"] .theme-toggle-btn.active {
+  border-color: #6366f1;
+  color: #4f46e5;
+}
+
+.theme-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 135px;
+  background: var(--bg-surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  padding: 0.35rem;
+  z-index: 100;
+  animation: fadeIn 0.15s ease;
+}
+
+[data-theme="light"] .theme-dropdown-menu {
+  background: #ffffff;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.theme-dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.65rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.825rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  outline: none;
+}
+
+.theme-dropdown-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+}
+
+.theme-dropdown-item.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+[data-theme="light"] .theme-dropdown-item {
+  color: #4b5563;
+}
+
+[data-theme="light"] .theme-dropdown-item:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+[data-theme="light"] .theme-dropdown-item.active {
+  color: #4f46e5;
+}
+
+.theme-dropdown-item-content {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.theme-dropdown-item-icon {
+  opacity: 0.85;
+}
+
+.theme-dropdown-check {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+[data-theme="light"] .theme-dropdown-check {
+  color: #4f46e5;
 }
 
 /* Auth Pill / User Badge */
