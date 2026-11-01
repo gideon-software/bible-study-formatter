@@ -10,6 +10,7 @@ import {
   DEFAULT_FORMAT_OPTIONS,
   DEFAULT_VERSION,
   FormatOptions,
+  getBookById,
   getBookChapters,
   validateEsvPassageRange,
   ESV_COPYRIGHT_NOTICE,
@@ -31,6 +32,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  History,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GoogleLogo } from "@/components/GoogleLogo";
@@ -316,6 +318,15 @@ export default function Home() {
 
   // Available chapters for selected book
   const chapters = useMemo(() => getBookChapters(bookId), [bookId]);
+  const currentBook = useMemo(() => getBookById(bookId), [bookId]);
+  const inFlightTitle = useMemo(() => {
+    const bookName = currentBook?.name || bookId;
+    const passage =
+      chapterStart === chapterEnd
+        ? `${bookName} ${chapterStart}`
+        : `${bookName} ${chapterStart}-${chapterEnd}`;
+    return `${passage} (${versionId})`;
+  }, [currentBook, bookId, chapterStart, chapterEnd, versionId]);
 
   // Check if formatting options differ from saved defaults
   const isFormattingDirty = useMemo(() => {
@@ -1215,16 +1226,18 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Right Column: Live Document Preview */}
-        <div className="glass-panel preview-panel">
-          <div>
-            <h2 className="section-title">
-              <FileText size={18} color="var(--primary)" /> Live Document Preview
-            </h2>
-            <p className="preview-subtitle">
-              Simulating formatting for <strong>John 1-3</strong>
-            </p>
-          </div>
+        {/* Right Column: Preview & Recent Docs */}
+        <div className="preview-column">
+          {/* Card 1: Live Document Preview */}
+          <div className="glass-panel preview-panel">
+            <div>
+              <h2 className="section-title">
+                <FileText size={18} color="var(--primary)" /> Live document preview
+              </h2>
+              <p className="preview-subtitle">
+                Simulating formatting for <strong>John 1-3</strong>
+              </p>
+            </div>
 
           {/* Simulated Google Doc Paper */}
           <div
@@ -1299,31 +1312,32 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Generation Progress & Errors */}
-          {(isGenerating || errorMsg) && (
-            <div className="generation-status">
-              {statusMessage && (
-                <div className="status-indicator">
-                  <RefreshCw
-                    size={16}
-                    className={isGenerating ? "spin" : ""}
-                    color="var(--primary)"
-                  />
-                  <span>{statusMessage}</span>
-                </div>
-              )}
+          </div>
 
-              {isGenerating && (
-                <div className="progress-track">
-                  <div
-                    className={`progress-bar-fill ${progress === null ? "indeterminate" : ""}`}
-                    style={{ width: progress !== null ? `${progress}%` : undefined }}
-                  />
-                </div>
-              )}
+          {/* Card 2: Recent Google Docs */}
+          {(groupedRecentDocs.length > 0 || isGenerating || errorMsg) && (
+            <div className="glass-panel recent-docs-panel">
+              <div className="recent-docs-header">
+                <h2 className="section-title recent-docs-title">
+                  <History size={18} color="var(--primary)" />
+                  <span>Recent Google Docs</span>
+                  {groupedRecentDocs.length > 0 && (
+                    <span className="recent-docs-subtitle">(last 5)</span>
+                  )}
+                </h2>
+                {userHistory.length > 0 && (
+                  <button
+                    type="button"
+                    className="recent-docs-view-all"
+                    onClick={() => setIsHistoryModalOpen(true)}
+                  >
+                    View all ({userHistory.length}) →
+                  </button>
+                )}
+              </div>
 
               {errorMsg && (
-                <div className="status-error">
+                <div className="status-error" style={{ margin: "0.25rem 0 0.5rem 0" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", width: "100%" }}>
                     <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
                     <div style={{ flex: 1 }}>
@@ -1364,29 +1378,37 @@ export default function Home() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Recent Google Docs Section */}
-          {groupedRecentDocs.length > 0 && (
-            <div className="recent-docs-section">
-              <div className="recent-docs-header">
-                <div className="recent-docs-title">
-                  <span>Recent Google Docs</span>
-                  <span className="recent-docs-subtitle">(last 5)</span>
-                </div>
-                {userHistory.length > 0 && (
-                  <button
-                    type="button"
-                    className="recent-docs-view-all"
-                    onClick={() => setIsHistoryModalOpen(true)}
-                  >
-                    View all ({userHistory.length}) →
-                  </button>
-                )}
-              </div>
-
-              <div className="recent-docs-list">
+              {(isGenerating || groupedRecentDocs.length > 0) && (
+                <div className="recent-docs-list">
+                  {/* In-Flight Active Generation Placeholder */}
+                  {isGenerating && (
+                    <div className="doc-history-group in-flight-group">
+                      <div className="doc-history-row in-flight-row">
+                        <div className="doc-history-info" style={{ width: "100%" }}>
+                          <div className="doc-history-title-row">
+                            <span className="doc-in-flight-title">
+                              {inFlightTitle}
+                            </span>
+                            <span className="doc-generating-badge">
+                              <RefreshCw size={12} className="spin" /> Generating...
+                            </span>
+                          </div>
+                          {statusMessage && (
+                            <div className="doc-in-flight-status">
+                              {statusMessage}
+                            </div>
+                          )}
+                          <div className="progress-track" style={{ margin: "0.45rem 0 0.15rem 0" }}>
+                            <div
+                              className={`progress-bar-fill ${progress === null ? "indeterminate" : ""}`}
+                              style={{ width: progress !== null ? `${progress}%` : undefined }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 {groupedRecentDocs.map((group, idx) => {
                   const item = group.latest;
                   const isJustCreated =
@@ -1543,8 +1565,9 @@ export default function Home() {
                   );
                 })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        )}
         </div>
       </div>
 
