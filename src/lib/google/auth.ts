@@ -122,7 +122,6 @@ export function isAdminEmail(email?: string | null): boolean {
 }
 
 export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/documents",
   "https://www.googleapis.com/auth/drive.file",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",

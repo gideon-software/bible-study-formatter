@@ -9,7 +9,7 @@ It formats Scripture passages into cleanly styled Google Docs with customizable 
 ## Features
 
 - **Google Docs & Drive Direct Integration**:
-  - Connects via Google OAuth 2.0 (`documents` + `drive.file` scopes) with HMAC-SHA256 signed session cookies and automatic OAuth token refresh.
+  - Connects via Google OAuth 2.0 (`drive.file` scope) with HMAC-SHA256 signed session cookies and automatic OAuth token refresh.
   - Creates and formats Google Docs directly in the user's Drive (`Bible Study/` folder by default).
   - Automatically timestamps earlier drafts in Google Drive (`[Oct 29 @ 6:12am]`) when re-generating the same passage so the latest version always has the clean title.
 - **5 Bible Translations Across 3 Official APIs**:

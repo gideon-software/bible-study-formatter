@@ -65,9 +65,8 @@ export default function TermsOfServicePage() {
               account credentials.
             </li>
             <li>
-              You agree to grant BSF permissions under the <code>drive.file</code> and{" "}
-              <code>documents</code> scopes solely for creating, styling, and managing documents
-              generated through the Service.
+              You agree to grant BSF permissions under the <code>drive.file</code> scope solely for
+              creating, styling, and managing documents generated through the Service.
             </li>
             <li>
               You may revoke BSF&apos;s access at any time via your Google Account Security Settings.

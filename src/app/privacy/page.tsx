@@ -69,18 +69,14 @@ export default function PrivacyPolicyPage() {
 
         <section>
           <h2>2. How We Access and Use Google User Data</h2>
-          <p>BSF requests permission for the following Google OAuth scopes:</p>
+          <p>BSF requests permission for the following Google OAuth scope:</p>
           <ul>
             <li>
-              <code>https://www.googleapis.com/auth/documents</code>: Used solely to create and
-              format Bible study documents with the typography, margins, superscripts, verse
-              numbers, and headings you specify.
-            </li>
-            <li>
-              <code>https://www.googleapis.com/auth/drive.file</code>: Used to place newly generated
-              documents directly into your Google Drive, to append timestamps to earlier drafts of
-              the same passage, and to move documents created by BSF to your Google Drive trash when
-              you explicitly choose to delete them.
+              <code>https://www.googleapis.com/auth/drive.file</code>: Used to create and format Bible
+              study documents with the typography, margins, superscripts, verse numbers, and headings
+              you specify, place newly generated documents directly into your Google Drive, append
+              timestamps to earlier drafts of the same passage, and move documents created by BSF to
+              your Google Drive trash when you explicitly choose to delete them.
             </li>
           </ul>
           <p className="legal-callout">
