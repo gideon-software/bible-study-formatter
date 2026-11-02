@@ -330,16 +330,6 @@ export default function AdminPage() {
             <Filter size={13} />
             {excludeAdmins ? "Excluding admin runs" : "Including admin runs"}
           </button>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => runAdminAction("sync_sheet", { action: "sync_legacy_sheet" })}
-            disabled={busyAction === "sync_sheet"}
-            title="Re-sync historical v1 execution rows from Google Sheets"
-          >
-            <Database size={13} />
-            {busyAction === "sync_sheet" ? "Syncing Sheet..." : "Sync Legacy Sheet"}
-          </button>
           <ThemeToggle />
           <button
             className="btn btn-secondary btn-sm"

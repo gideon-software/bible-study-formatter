@@ -10,8 +10,6 @@ import {
   SESSION_COOKIE_NAME,
 } from "@/lib/google/auth";
 
-const LEGACY_SHEET_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/1UaJORxJ3aHaRh_VerQ3rKBy5L2MaxcKR1ryIqu3g2LU/export?format=csv&gid=897246390";
 
 async function verifyAdminSession(): Promise<{
   authorized: boolean;
@@ -357,7 +355,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { action, version, id } = body as {
-      action: "clear_cache" | "resolve_missing_element" | "sync_legacy_sheet";
+      action: "clear_cache" | "resolve_missing_element";
       version?: string;
       id?: number;
     };
@@ -393,59 +391,6 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         message: "Marked element as resolved.",
-      });
-    }
-
-    if (action === "sync_legacy_sheet") {
-      const res = await fetch(LEGACY_SHEET_CSV_URL);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch legacy Google Sheet (${res.status})`);
-      }
-      const text = await res.text();
-      const lines = text.trim().split(/\r?\n/).slice(1);
-
-      await db
-        .delete(executions)
-        .where(sql`${executions.optionsJson}->>'source' = 'legacy_v1'`);
-
-      const rowsToInsert = [];
-      for (const line of lines) {
-        const [ts, ver, rawBook, start, end] = line.split(",");
-        if (!ts || !start || !end) continue;
-        const [bookId, chStartStr] = start.split(".");
-        const [, chEndStr] = end.split(".");
-        const chapterStart = parseInt(chStartStr, 10);
-        const chapterEnd = parseInt(chEndStr, 10);
-        if (isNaN(chapterStart) || isNaN(chapterEnd)) continue;
-
-        const bookName = rawBook === "Psalm" ? "Psalms" : rawBook.trim();
-        const [datePart, timePart] = ts.trim().split(" ");
-        const [m, d, y] = datePart.split("/").map(Number);
-        const [hh, mm, ss] = (timePart || "0:0:0").split(":").map(Number);
-        const createdAt = new Date(
-          Date.UTC(y, m - 1, d, hh + 4, mm, ss || 0)
-        );
-
-        rowsToInsert.push({
-          versionAbbr: ver.trim(),
-          bookId: bookId.trim(),
-          bookName,
-          chapterStart,
-          chapterEnd,
-          optionsJson: { source: "legacy_v1" },
-          createdAt,
-        });
-      }
-
-      for (let i = 0; i < rowsToInsert.length; i += 250) {
-        const chunk = rowsToInsert.slice(i, i + 250);
-        await db.insert(executions).values(chunk);
-      }
-
-      return NextResponse.json({
-        success: true,
-        importedCount: rowsToInsert.length,
-        message: `Synced ${rowsToInsert.length.toLocaleString()} historical runs from Google Sheets.`,
       });
     }
 
