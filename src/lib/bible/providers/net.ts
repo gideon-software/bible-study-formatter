@@ -99,6 +99,7 @@ export function parseNetVerses(
       if (runs.length > 0) {
         paragraphs.push({
           type: "paragraph",
+          isPreVerseHeader: true,
           runs,
         });
       }
@@ -111,6 +112,7 @@ export function parseNetVerses(
       if (runs.length > 0) {
         paragraphs.push({
           type: "paragraph",
+          isPreVerseHeader: true,
           runs,
         });
       }

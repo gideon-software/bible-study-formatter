@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import {
   getBookById,
+  getChapterVerseCount,
   getDocTitle,
+  isPartialVerseSelection,
   FormatOptions,
   ParsedChapter,
   SUPPORTED_VERSIONS,
@@ -44,6 +46,8 @@ export async function POST(request: Request) {
       bookId,
       chapterStart,
       chapterEnd,
+      verseStart,
+      verseEnd,
       version = "ESV",
       options,
       timeZone,
@@ -51,6 +55,8 @@ export async function POST(request: Request) {
       bookId: string;
       chapterStart: number;
       chapterEnd: number;
+      verseStart?: number;
+      verseEnd?: number;
       version?: string;
       options: FormatOptions;
       timeZone?: string;
@@ -68,10 +74,49 @@ export async function POST(request: Request) {
       );
     }
 
+    const maxStartV = getChapterVerseCount(bookId, chapterStart, version);
+    const maxEndV = getChapterVerseCount(bookId, chapterEnd, version);
+    const effectiveVerseStart =
+      typeof verseStart === "number" && !isNaN(verseStart) && verseStart >= 1
+        ? Math.min(verseStart, maxStartV || verseStart)
+        : 1;
+    const effectiveVerseEnd =
+      typeof verseEnd === "number" && !isNaN(verseEnd) && verseEnd >= 1
+        ? Math.min(verseEnd, maxEndV || verseEnd)
+        : maxEndV;
+
+    if (
+      chapterStart === chapterEnd &&
+      effectiveVerseEnd > 0 &&
+      effectiveVerseStart > effectiveVerseEnd
+    ) {
+      return NextResponse.json(
+        {
+          error: `Invalid verse range: ${effectiveVerseStart}-${effectiveVerseEnd}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const isPartialVerses = isPartialVerseSelection(
+      bookId,
+      chapterStart,
+      chapterEnd,
+      effectiveVerseStart,
+      effectiveVerseEnd,
+      version
+    );
+
     // Validate Crossway ESV API guidelines (max 500 verses / half a book)
     // See ESV_POLICY_LIMITS in src/lib/bible/books.ts to adjust if exemption is granted
     if (version === "ESV") {
-      const policyCheck = validateEsvPassageRange(bookId, chapterStart, chapterEnd);
+      const policyCheck = validateEsvPassageRange(
+        bookId,
+        chapterStart,
+        chapterEnd,
+        effectiveVerseStart,
+        effectiveVerseEnd
+      );
       if (!policyCheck.allowed) {
         return NextResponse.json(
           {
@@ -254,7 +299,17 @@ export async function POST(request: Request) {
               throw new Error(`Failed to load Scripture for chapter ${ch}`);
             }
 
-            chapters.push(applyOptionsToChapter(parsedCh, options));
+            const chVerseStart = ch === chapterStart ? effectiveVerseStart : 1;
+            const chVerseEnd =
+              ch === chapterEnd ? effectiveVerseEnd : undefined;
+
+            chapters.push(
+              applyOptionsToChapter(parsedCh, options, {
+                verseStart: chVerseStart,
+                verseEnd: chVerseEnd,
+                versionAbbr: version,
+              })
+            );
 
             // Smooth progress from 5% to 80% based on chapters completed
             const doneRatio = (ch - chapterStart + 1) / totalChapters;
@@ -273,7 +328,14 @@ export async function POST(request: Request) {
           });
 
           // Build document title and create Google Doc
-          const docTitle = getDocTitle(bookId, chapterStart, chapterEnd, version);
+          const docTitle = getDocTitle(
+            bookId,
+            chapterStart,
+            chapterEnd,
+            version,
+            effectiveVerseStart,
+            effectiveVerseEnd
+          );
           const docResult = await createGoogleDocWithAuth(
             authClient,
             docTitle,
@@ -294,10 +356,11 @@ export async function POST(request: Request) {
           if (db) {
             if (userEmail) {
               try {
-                const prevDocs = await db
+                const candidatePrevDocs = await db
                   .select({
                     docId: executions.docId,
                     createdAt: executions.createdAt,
+                    optionsJson: executions.optionsJson,
                   })
                   .from(executions)
                   .where(
@@ -312,17 +375,39 @@ export async function POST(request: Request) {
                     )
                   )
                   .orderBy(desc(executions.createdAt))
-                  .limit(1);
+                  .limit(20);
 
-                if (prevDocs.length > 0 && prevDocs[0].docId) {
+                const matchingPrev = candidatePrevDocs.find((row) => {
+                  const rowOpts = (row.optionsJson || {}) as {
+                    verseStart?: number;
+                    verseEnd?: number;
+                  };
+                  const rowVStart =
+                    typeof rowOpts.verseStart === "number"
+                      ? rowOpts.verseStart
+                      : undefined;
+                  const rowVEnd =
+                    typeof rowOpts.verseEnd === "number"
+                      ? rowOpts.verseEnd
+                      : undefined;
+                  if (!isPartialVerses) {
+                    return rowVStart === undefined && rowVEnd === undefined;
+                  }
+                  return (
+                    rowVStart === effectiveVerseStart &&
+                    rowVEnd === effectiveVerseEnd
+                  );
+                });
+
+                if (matchingPrev && matchingPrev.docId) {
                   const suffix = formatDriveTimestampSuffix(
-                    new Date(prevDocs[0].createdAt),
+                    new Date(matchingPrev.createdAt),
                     timeZone
                   );
                   const renamedTitle = `${docTitle} ${suffix}`;
                   await renameGoogleDriveFile(
                     authClient,
-                    prevDocs[0].docId,
+                    matchingPrev.docId,
                     renamedTitle
                   );
                 }
@@ -335,6 +420,14 @@ export async function POST(request: Request) {
             }
 
             try {
+              const storedOptionsJson = isPartialVerses
+                ? {
+                    ...options,
+                    verseStart: effectiveVerseStart,
+                    verseEnd: effectiveVerseEnd,
+                  }
+                : options;
+
               await db.insert(executions).values({
                 userEmail,
                 versionAbbr: version,
@@ -344,7 +437,7 @@ export async function POST(request: Request) {
                 chapterEnd,
                 docId: docResult.docId,
                 docUrl: docResult.docUrl,
-                optionsJson: options,
+                optionsJson: storedOptionsJson,
                 durationMs,
               });
             } catch (logErr) {

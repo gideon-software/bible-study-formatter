@@ -1342,6 +1342,26 @@ body {
   align-items: center;
 }
 
+.verse-summary-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: -0.45rem;
+  padding: 0.1rem 0.15rem;
+  font-size: 0.8rem;
+}
+
+.verse-summary-text {
+  color: var(--text-muted);
+}
+
+.verse-summary-dot {
+  color: var(--text-subtle);
+  user-select: none;
+}
+
 .btn-create-doc {
   width: 100%;
   padding: 1rem;

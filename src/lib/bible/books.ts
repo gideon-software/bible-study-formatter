@@ -123,9 +123,16 @@ export interface TextRun {
 export interface DocParagraph {
   type: "paragraph" | "heading" | "poetry" | "pageBreak" | "titlePage";
   isSectionHeading?: boolean;
+  isPreVerseHeader?: boolean;
   alignment?: TextAlignment;
   indentSpaces?: number; // 0, 4, 8 for poetry indents
   runs: TextRun[];
+}
+
+export interface ChapterVerseRange {
+  verseStart?: number;
+  verseEnd?: number;
+  versionAbbr?: string;
 }
 
 export interface ParsedChapter {
@@ -225,13 +232,36 @@ export function normalizeParagraphRuns(runs: TextRun[]): TextRun[] {
   return result;
 }
 
+function parseVerseNumFromSuperscript(text: string): number | null {
+  const afterColon = text.includes(":") ? text.split(":")[1] : text;
+  const m = afterColon.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function isPreVerseParagraph(p: DocParagraph): boolean {
+  if (p.type === "heading" || p.isPreVerseHeader) return true;
+  // Fallback for cached chapters created prior to isPreVerseHeader:
+  // Psalm superscriptions, acrostic headers (e.g. "Teth"), and Song of Solomon speaker labels
+  // are non-poetry paragraphs with no verse superscript where every run is bold or italic.
+  if (
+    p.type === "paragraph" &&
+    p.runs.length > 0 &&
+    !p.runs.some((r) => r.superscript) &&
+    p.runs.every((r) => Boolean(r.bold || r.italic))
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Applies user FormatOptions (chapterHeaders, sectionHeadings, verseNumbers)
- * to a ParsedChapter (such as a full chapter retrieved from cache).
+ * and optional verseRange slicing to a ParsedChapter (such as a full chapter retrieved from cache).
  */
 export function applyOptionsToChapter(
   chapter: ParsedChapter,
-  options: FormatOptions
+  options: FormatOptions,
+  verseRange?: ChapterVerseRange
 ): ParsedChapter {
   const book = getBookById(chapter.bookId);
   const expectedChapterHeader =
@@ -239,8 +269,29 @@ export function applyOptionsToChapter(
       ? `${chapter.bookName} ${chapter.chapterNum}`
       : chapter.bookName;
 
+  const maxV = getChapterVerseCount(
+    chapter.bookId,
+    chapter.chapterNum,
+    verseRange?.versionAbbr
+  );
+  const vStart =
+    verseRange?.verseStart !== undefined && verseRange.verseStart > 1
+      ? verseRange.verseStart
+      : 1;
+  const vEnd =
+    verseRange?.verseEnd !== undefined &&
+    maxV > 0 &&
+    verseRange.verseEnd < maxV
+      ? verseRange.verseEnd
+      : undefined;
+  const isPartialChapter = vStart > 1 || vEnd !== undefined;
+
   const includeSectionHeadings = Boolean(options.sectionHeadings);
   const filteredParagraphs: DocParagraph[] = [];
+
+  let currentVerse = 0;
+  let pendingPreVerseParagraphs: DocParagraph[] = [];
+  let firstSuperscriptFormatted = false;
 
   chapter.paragraphs.forEach((p, idx) => {
     if (p.type === "heading") {
@@ -252,21 +303,73 @@ export function applyOptionsToChapter(
 
       if (isMainChapterHeader) {
         if (options.chapterHeaders) {
-          filteredParagraphs.push(p);
+          const headerText = getChapterHeaderText(
+            chapter.bookId,
+            chapter.chapterNum,
+            vStart,
+            vEnd,
+            verseRange?.versionAbbr
+          );
+          filteredParagraphs.push({
+            ...p,
+            runs: [{ text: headerText, bold: true }],
+          });
         }
       } else {
         // Section heading
         if (includeSectionHeadings) {
-          filteredParagraphs.push(p);
+          if (isPartialChapter) {
+            pendingPreVerseParagraphs.push(p);
+          } else {
+            filteredParagraphs.push(p);
+          }
         }
       }
       return;
     }
 
+    if (isPartialChapter && isPreVerseParagraph(p)) {
+      pendingPreVerseParagraphs.push(p);
+      return;
+    }
+
     if (p.type === "paragraph" || p.type === "poetry") {
+      let runsToProcess = p.runs;
+
+      if (isPartialChapter) {
+        const slicedRuns: TextRun[] = [];
+        for (const r of p.runs) {
+          if (r.superscript) {
+            const parsedV = parseVerseNumFromSuperscript(r.text);
+            if (parsedV !== null) {
+              currentVerse = parsedV;
+            }
+          }
+          const effectiveVerse = currentVerse > 0 ? currentVerse : 1;
+          const inRange =
+            effectiveVerse >= vStart &&
+            (vEnd === undefined || effectiveVerse <= vEnd);
+
+          if (pendingPreVerseParagraphs.length > 0) {
+            if (inRange) {
+              filteredParagraphs.push(...pendingPreVerseParagraphs);
+            }
+            pendingPreVerseParagraphs = [];
+          }
+
+          if (inRange) {
+            slicedRuns.push(r);
+          }
+        }
+        runsToProcess = slicedRuns;
+        if (runsToProcess.length === 0) {
+          return;
+        }
+      }
+
       if (!options.verseNumbers) {
         const runsWithoutVerses = normalizeParagraphRuns(
-          p.runs.filter((r) => !r.superscript)
+          runsToProcess.filter((r) => !r.superscript)
         );
         if (runsWithoutVerses.length > 0) {
           filteredParagraphs.push({
@@ -275,19 +378,25 @@ export function applyOptionsToChapter(
           });
         }
       } else {
-        // Adjust verse 1 label based on whether chapterHeaders is enabled
+        // Adjust first included verse label based on whether chapterHeaders is enabled
         const adjustedRuns = normalizeParagraphRuns(
-          p.runs.map((r) => {
+          runsToProcess.map((r) => {
             if (!r.superscript) return r;
             const trimmed = r.text.trim();
-            if (!options.chapterHeaders && trimmed === "1") {
-              return { ...r, text: `${chapter.chapterNum}:1\u00A0` };
+            const cleanNum = trimmed.includes(":")
+              ? trimmed.split(":")[1].trim()
+              : trimmed;
+
+            if (!firstSuperscriptFormatted) {
+              firstSuperscriptFormatted = true;
+              if (!options.chapterHeaders) {
+                return { ...r, text: `${chapter.chapterNum}:${cleanNum}\u00A0` };
+              }
+              return { ...r, text: `${cleanNum}\u00A0` };
             }
-            if (
-              options.chapterHeaders &&
-              trimmed === `${chapter.chapterNum}:1`
-            ) {
-              return { ...r, text: "1\u00A0" };
+
+            if (trimmed.includes(":")) {
+              return { ...r, text: `${cleanNum}\u00A0` };
             }
             return r;
           })
@@ -463,6 +572,99 @@ export function getBookChapters(bookId: string): number[] {
   return Array.from({ length: book.numChapters }, (_, i) => i + 1);
 }
 
+/**
+ * Returns the number of verses in a given book and chapter, accounting for
+ * minor translation versification differences (e.g., 3 John 15 in CSB/NASB/NIV,
+ * Revelation 12:18 in NASB/NIV).
+ */
+export function getChapterVerseCount(
+  bookId: string,
+  chapterNum: number,
+  versionAbbr?: string
+): number {
+  const upperBook = bookId.trim().toUpperCase();
+  const verses = BIBLE_CHAPTER_VERSES[upperBook];
+  if (!verses || chapterNum < 1 || chapterNum > verses.length) return 0;
+
+  const ver = (versionAbbr || "ESV").trim().toUpperCase();
+  if (
+    upperBook === "3JN" &&
+    chapterNum === 1 &&
+    ["CSB", "NASB", "NIV"].includes(ver)
+  ) {
+    return 15;
+  }
+  if (
+    upperBook === "REV" &&
+    chapterNum === 12 &&
+    ["NASB", "NIV"].includes(ver)
+  ) {
+    return 18;
+  }
+
+  return verses[chapterNum - 1] || 0;
+}
+
+export function getChapterVerses(
+  bookId: string,
+  chapterNum: number,
+  versionAbbr?: string
+): number[] {
+  const count = getChapterVerseCount(bookId, chapterNum, versionAbbr);
+  if (count <= 0) return [1];
+  return Array.from({ length: count }, (_, i) => i + 1);
+}
+
+export function isPartialVerseSelection(
+  bookId: string,
+  chapterStart: number,
+  chapterEnd: number,
+  verseStart?: number,
+  verseEnd?: number,
+  versionAbbr?: string
+): boolean {
+  const maxEndV = getChapterVerseCount(bookId, chapterEnd, versionAbbr);
+  const hasStartSubset = verseStart !== undefined && verseStart > 1;
+  const hasEndSubset =
+    verseEnd !== undefined && maxEndV > 0 && verseEnd < maxEndV;
+  return hasStartSubset || hasEndSubset;
+}
+
+export function getChapterHeaderText(
+  bookId: string,
+  chapterNum: number,
+  verseStart?: number,
+  verseEnd?: number,
+  versionAbbr?: string
+): string {
+  const book = getBookById(bookId);
+  const bookName = book ? book.name : bookId;
+  const maxV = getChapterVerseCount(bookId, chapterNum, versionAbbr);
+  const vStart = verseStart !== undefined && verseStart > 1 ? verseStart : 1;
+  const vEnd =
+    verseEnd !== undefined && maxV > 0 && verseEnd < maxV
+      ? verseEnd
+      : undefined;
+  const isPartial = vStart > 1 || vEnd !== undefined;
+
+  if (!isPartial) {
+    return book && book.numChapters > 1
+      ? `${bookName} ${chapterNum}`
+      : bookName;
+  }
+
+  const actualEnd = vEnd ?? maxV;
+  if (book && book.numChapters === 1) {
+    return vStart === actualEnd
+      ? `${bookName} ${vStart}`
+      : `${bookName} ${vStart}-${actualEnd}`;
+  }
+
+  return vStart === actualEnd
+    ? `${bookName} ${chapterNum}:${vStart}`
+    : `${bookName} ${chapterNum}:${vStart}-${actualEnd}`;
+}
+
 export function getVersionName(versionAbbr: string): string {
   const found = SUPPORTED_VERSIONS.find(
     (v) =>
@@ -475,31 +677,81 @@ export function getVersionName(versionAbbr: string): string {
 export function getPassageTitle(
   bookId: string,
   chapterStart: number,
-  chapterEnd: number
+  chapterEnd: number,
+  verseStart?: number,
+  verseEnd?: number,
+  versionAbbr?: string
 ): string {
   const book = getBookById(bookId);
   const bookName = book ? book.name : bookId;
-  const isFullBook =
-    book && chapterStart === 1 && chapterEnd === book.numChapters;
 
-  if (isFullBook) {
-    return bookName;
+  const maxStartV = getChapterVerseCount(bookId, chapterStart, versionAbbr);
+  const maxEndV = getChapterVerseCount(bookId, chapterEnd, versionAbbr);
+  const effStartV =
+    verseStart !== undefined && verseStart >= 1
+      ? maxStartV > 0
+        ? Math.min(verseStart, maxStartV)
+        : verseStart
+      : 1;
+  const effEndV =
+    verseEnd !== undefined && verseEnd >= 1
+      ? maxEndV > 0
+        ? Math.min(verseEnd, maxEndV)
+        : verseEnd
+      : maxEndV;
+
+  const isPartial =
+    effStartV > 1 || (maxEndV > 0 && effEndV > 0 && effEndV < maxEndV);
+
+  if (!isPartial) {
+    const isFullBook =
+      book && chapterStart === 1 && chapterEnd === book.numChapters;
+
+    if (isFullBook) {
+      return bookName;
+    }
+
+    if (chapterStart === chapterEnd) {
+      return `${bookName} ${chapterStart}`;
+    }
+
+    return `${bookName} ${chapterStart}-${chapterEnd}`;
   }
 
+  // Partial verse selection in a single-chapter book (e.g. "Philemon 4-7" or "Philemon 6")
+  if (book && book.numChapters === 1) {
+    return effStartV === effEndV
+      ? `${bookName} ${effStartV}`
+      : `${bookName} ${effStartV}-${effEndV}`;
+  }
+
+  // Partial verse selection within a single chapter (e.g. "Psalms 119:65-72" or "John 3:16")
   if (chapterStart === chapterEnd) {
-    return `${bookName} ${chapterStart}`;
+    return effStartV === effEndV
+      ? `${bookName} ${chapterStart}:${effStartV}`
+      : `${bookName} ${chapterStart}:${effStartV}-${effEndV}`;
   }
 
-  return `${bookName} ${chapterStart}-${chapterEnd}`;
+  // Partial verse selection spanning multiple chapters (e.g. "Luke 9:57-10:24")
+  return `${bookName} ${chapterStart}:${effStartV}-${chapterEnd}:${effEndV}`;
 }
 
 export function getDocTitle(
   bookId: string,
   chapterStart: number,
   chapterEnd: number,
-  versionAbbr: string = "ESV"
+  versionAbbr: string = "ESV",
+  verseStart?: number,
+  verseEnd?: number
 ): string {
-  const passageTitle = getPassageTitle(bookId, chapterStart, chapterEnd);
+  const passageTitle = getPassageTitle(
+    bookId,
+    chapterStart,
+    chapterEnd,
+    verseStart,
+    verseEnd,
+    versionAbbr
+  );
   return `${passageTitle} (${versionAbbr})`;
 }
 
@@ -563,24 +815,57 @@ export function getVersionCredit(versionAbbr: string): string {
 }
 
 /**
- * Calculates the exact number of verses in a chapter range
+ * Calculates the exact number of verses in a chapter/verse range
  */
 export function getPassageVerseCount(
   bookId: string,
   chapterStart: number,
-  chapterEnd: number
+  chapterEnd: number,
+  verseStart?: number,
+  verseEnd?: number,
+  versionAbbr?: string
 ): number {
   const verses = BIBLE_CHAPTER_VERSES[bookId.toUpperCase()];
-  if (!verses) return 0;
+  if (!verses || chapterStart > chapterEnd) return 0;
+
+  if (chapterStart === chapterEnd) {
+    const maxV = getChapterVerseCount(bookId, chapterStart, versionAbbr);
+    if (maxV <= 0) return 0;
+    const s =
+      verseStart !== undefined && verseStart >= 1
+        ? Math.min(verseStart, maxV)
+        : 1;
+    const e =
+      verseEnd !== undefined && verseEnd >= 1
+        ? Math.max(s, Math.min(verseEnd, maxV))
+        : maxV;
+    return e - s + 1;
+  }
+
   let total = 0;
   for (let ch = chapterStart; ch <= chapterEnd && ch <= verses.length; ch++) {
-    total += verses[ch - 1] || 0;
+    const maxV = getChapterVerseCount(bookId, ch, versionAbbr);
+    if (ch === chapterStart) {
+      const s =
+        verseStart !== undefined && verseStart >= 1
+          ? Math.min(verseStart, maxV)
+          : 1;
+      total += Math.max(0, maxV - s + 1);
+    } else if (ch === chapterEnd) {
+      const e =
+        verseEnd !== undefined && verseEnd >= 1
+          ? Math.min(verseEnd, maxV)
+          : maxV;
+      total += Math.max(0, e);
+    } else {
+      total += maxV;
+    }
   }
   return total;
 }
 
 /**
- * Validates whether the requested chapter range complies with Crossway's
+ * Validates whether the requested passage range complies with Crossway's
  * free API distribution guidelines:
  * "Up to 500 verses or half a book, whichever is less (excepting single-chapter
  * and double-chapter books)." - https://api.esv.org/#conditions
@@ -598,7 +883,9 @@ export interface EsvPolicyCheckResult {
 export function validateEsvPassageRange(
   bookId: string,
   chapterStart: number,
-  chapterEnd: number
+  chapterEnd: number,
+  verseStart?: number,
+  verseEnd?: number
 ): EsvPolicyCheckResult {
   if (!ESV_POLICY_LIMITS.enforceLimits) {
     return { allowed: true };
@@ -607,7 +894,14 @@ export function validateEsvPassageRange(
   const book = getBookById(bookId);
   if (!book) return { allowed: false, reason: "Invalid book ID" };
 
-  const totalVerses = getPassageVerseCount(bookId, chapterStart, chapterEnd);
+  const totalVerses = getPassageVerseCount(
+    bookId,
+    chapterStart,
+    chapterEnd,
+    verseStart,
+    verseEnd,
+    "ESV"
+  );
 
   // 1- and 2-chapter books are explicitly exempt from the half-book limit per Crossway terms
   if (book.numChapters <= 2) {
@@ -632,9 +926,13 @@ export function validateEsvPassageRange(
     const versesArr = BIBLE_CHAPTER_VERSES[bookId.toUpperCase()] || [];
     for (let ch = chapterStart; ch <= book.numChapters; ch++) {
       const chVerses = versesArr[ch - 1] || 0;
-      if (runningVerses + chVerses > 500) break;
+      const effectiveChVerses =
+        ch === chapterStart && verseStart && verseStart > 1
+          ? Math.max(0, chVerses - verseStart + 1)
+          : chVerses;
+      if (runningVerses + effectiveChVerses > 500) break;
       if (ch - chapterStart + 1 > maxAllowedChapters) break;
-      runningVerses += chVerses;
+      runningVerses += effectiveChVerses;
       suggestedEnd = ch;
     }
 
@@ -643,7 +941,15 @@ export function validateEsvPassageRange(
         ? `chapter ${chapterStart}`
         : `chapters ${chapterStart}–${suggestedEnd}`;
 
-    const reasonPrefix = `Crossway ESV policy limits single exports to 500 verses or half a book, whichever is less. ${book.name} ${chapterStart}–${chapterEnd} contains ${totalVerses} verses (exceeding the 500-verse cap).`;
+    const passageLabel = getPassageTitle(
+      bookId,
+      chapterStart,
+      chapterEnd,
+      verseStart,
+      verseEnd,
+      "ESV"
+    );
+    const reasonPrefix = `Crossway ESV policy limits single exports to 500 verses or half a book, whichever is less. ${passageLabel} contains ${totalVerses} verses (exceeding the 500-verse cap).`;
     const reasonSuffix = `(${runningVerses} verses), or export in smaller sections.`;
     const fullReason = `${reasonPrefix} To stay within guidelines, select up to ${rangeStr} ${reasonSuffix}`;
 
@@ -659,8 +965,32 @@ export function validateEsvPassageRange(
   }
 
   // Condition 2: Check half-book cap
-  if (numSelectedChapters > maxAllowedChapters) {
-    const suggestedEnd = Math.min(book.numChapters, chapterStart + maxAllowedChapters - 1);
+  const isPartial = isPartialVerseSelection(
+    bookId,
+    chapterStart,
+    chapterEnd,
+    verseStart,
+    verseEnd,
+    "ESV"
+  );
+  const fullBookVerses = getPassageVerseCount(
+    bookId,
+    1,
+    book.numChapters,
+    undefined,
+    undefined,
+    "ESV"
+  );
+  const exceedsHalfBook = isPartial
+    ? numSelectedChapters > maxAllowedChapters &&
+      totalVerses > Math.ceil(fullBookVerses / 2)
+    : numSelectedChapters > maxAllowedChapters;
+
+  if (exceedsHalfBook) {
+    const suggestedEnd = Math.min(
+      book.numChapters,
+      chapterStart + maxAllowedChapters - 1
+    );
     const rangeStr =
       suggestedEnd === chapterStart
         ? `chapter ${chapterStart}`

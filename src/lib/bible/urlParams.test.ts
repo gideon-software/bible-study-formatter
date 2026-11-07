@@ -91,6 +91,8 @@ describe("URL Parameters Parser", () => {
     assert.strictEqual(parsed.bookId, "ROM");
     assert.strictEqual(parsed.chapterStart, 1);
     assert.strictEqual(parsed.chapterEnd, 2);
+    assert.strictEqual(parsed.verseStart, undefined);
+    assert.strictEqual(parsed.verseEnd, undefined);
     assert.strictEqual(parsed.options?.chapterHeaders, true);
     assert.strictEqual(parsed.options?.chapterPageBreaks, false);
     assert.strictEqual(parsed.options?.verseNumbers, true);
@@ -100,5 +102,47 @@ describe("URL Parameters Parser", () => {
     assert.strictEqual(parsed.options?.fontSize, 12);
     assert.strictEqual(parsed.options?.lineSpacing, 1.5);
     assert.strictEqual(parsed.options?.pageMargins, 0.75);
+  });
+
+  it("parses and round-trips partial verse ranges via vstart and vend", () => {
+    const url = buildShareableUrl({
+      baseUrl: "https://bsf.example.com/",
+      versionId: "ESV",
+      bookId: "PSA",
+      chapterStart: 119,
+      chapterEnd: 119,
+      verseStart: 65,
+      verseEnd: 72,
+    });
+
+    assert(url.includes("vstart=65"));
+    assert(url.includes("vend=72"));
+
+    const parsed = parseUrlSettings(new URL(url).search);
+    assert.strictEqual(parsed.versionId, "ESV");
+    assert.strictEqual(parsed.bookId, "PSA");
+    assert.strictEqual(parsed.chapterStart, 119);
+    assert.strictEqual(parsed.chapterEnd, 119);
+    assert.strictEqual(parsed.verseStart, 65);
+    assert.strictEqual(parsed.verseEnd, 72);
+
+    // Full chapter range (1 to 176) omits vstart/vend from shareable URL
+    const fullChapterUrl = buildShareableUrl({
+      baseUrl: "https://bsf.example.com/",
+      versionId: "ESV",
+      bookId: "PSA",
+      chapterStart: 119,
+      chapterEnd: 119,
+      verseStart: 1,
+      verseEnd: 176,
+    });
+    assert(!fullChapterUrl.includes("vstart="));
+    assert(!fullChapterUrl.includes("vend="));
+
+    // Clamps out-of-range verseEnd to chapter's max verse count
+    const clamped = parseUrlSettings("?b=PHM&ch=1&vstart=4&vend=999");
+    assert.strictEqual(clamped.bookId, "PHM");
+    assert.strictEqual(clamped.verseStart, 4);
+    assert.strictEqual(clamped.verseEnd, 25);
   });
 });

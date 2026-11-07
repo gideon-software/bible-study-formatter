@@ -10,8 +10,12 @@ import {
   DEFAULT_FORMAT_OPTIONS,
   DEFAULT_VERSION,
   FormatOptions,
-  getBookById,
   getBookChapters,
+  getChapterVerseCount,
+  getChapterVerses,
+  getDocTitle,
+  getPassageVerseCount,
+  isPartialVerseSelection,
   validateEsvPassageRange,
   ESV_COPYRIGHT_NOTICE,
   getVersionCredit,
@@ -49,6 +53,8 @@ interface DocHistoryItem {
   bookName?: string;
   chapterStart: number;
   chapterEnd: number;
+  verseStart?: number;
+  verseEnd?: number;
   options?: Partial<FormatOptions> | null;
   createdAt: string;
 }
@@ -57,9 +63,18 @@ function getPassageGroupKey(item: {
   bookId: string;
   chapterStart: number;
   chapterEnd: number;
+  verseStart?: number;
+  verseEnd?: number;
   versionAbbr: string;
+  options?: (Partial<FormatOptions> & { verseStart?: number; verseEnd?: number }) | null;
 }): string {
-  return `${item.bookId.toUpperCase()}:${item.chapterStart}-${item.chapterEnd}:${item.versionAbbr.toUpperCase()}`;
+  const vStart = item.verseStart ?? item.options?.verseStart;
+  const vEnd = item.verseEnd ?? item.options?.verseEnd;
+  const versePart =
+    vStart !== undefined || vEnd !== undefined
+      ? `:${vStart ?? 1}-${vEnd ?? ""}`
+      : "";
+  return `${item.bookId.toUpperCase()}:${item.chapterStart}-${item.chapterEnd}${versePart}:${item.versionAbbr.toUpperCase()}`;
 }
 
 function formatRelativeDocDate(isoDate: string): string {
@@ -157,6 +172,7 @@ const STORAGE_KEYS = {
   CURRENT_OPTIONS: "bsf_current_options",
   LAST_PASSAGE: "bsf_last_passage",
   CURRENT_VERSION: "bsf_current_version",
+  SHOW_VERSES: "bsf_show_verses",
 } as const;
 
 function readStorageJson<T>(key: string): T | null {
@@ -205,6 +221,8 @@ interface DocHistoryRowActionsProps {
     bookId: string,
     chapterStart: number,
     chapterEnd: number,
+    verseStart?: number,
+    verseEnd?: number,
     options?: Partial<FormatOptions> | null
   ) => void;
   onTrash: (key: string, docIds: string[]) => void;
@@ -219,6 +237,10 @@ function DocHistoryRowActions({
   onTrash,
 }: DocHistoryRowActionsProps) {
   const isCopied = copiedKey === rowKey;
+  const rawOpts = (item.options || {}) as Partial<FormatOptions> & {
+    verseStart?: number;
+    verseEnd?: number;
+  };
   return (
     <div className="doc-history-actions">
       <button
@@ -231,6 +253,8 @@ function DocHistoryRowActions({
             item.bookId,
             item.chapterStart,
             item.chapterEnd,
+            item.verseStart ?? rawOpts.verseStart,
+            item.verseEnd ?? rawOpts.verseEnd,
             item.options
           )
         }
@@ -277,6 +301,11 @@ export default function Home() {
   const [bookId, setBookId] = useState("JHN");
   const [chapterStart, setChapterStart] = useState(1);
   const [chapterEnd, setChapterEnd] = useState(1);
+  const [verseStart, setVerseStart] = useState(1);
+  const [verseEnd, setVerseEnd] = useState(() =>
+    getChapterVerseCount("JHN", 1, SYSTEM_DEFAULT_VERSION)
+  );
+  const [showVerseSelector, setShowVerseSelector] = useState(false);
 
   // Formatting Options
   const [options, setOptions] = useState<FormatOptions>(SYSTEM_DEFAULT_OPTIONS);
@@ -307,6 +336,8 @@ export default function Home() {
     bookId: string;
     chapterStart: number;
     chapterEnd: number;
+    verseStart?: number;
+    verseEnd?: number;
     options: FormatOptions;
   } | null>(null);
   const [userHistory, setUserHistory] = useState<DocHistoryItem[]>([]);
@@ -318,17 +349,40 @@ export default function Home() {
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
 
-  // Available chapters for selected book
+  // Available chapters and verses for selected book/chapters
   const chapters = useMemo(() => getBookChapters(bookId), [bookId]);
-  const currentBook = useMemo(() => getBookById(bookId), [bookId]);
-  const inFlightTitle = useMemo(() => {
-    const bookName = currentBook?.name || bookId;
-    const passage =
-      chapterStart === chapterEnd
-        ? `${bookName} ${chapterStart}`
-        : `${bookName} ${chapterStart}-${chapterEnd}`;
-    return `${passage} (${versionId})`;
-  }, [currentBook, bookId, chapterStart, chapterEnd, versionId]);
+  const startChapterVerses = useMemo(
+    () => getChapterVerses(bookId, chapterStart, versionId),
+    [bookId, chapterStart, versionId]
+  );
+  const endChapterVerses = useMemo(
+    () => getChapterVerses(bookId, chapterEnd, versionId),
+    [bookId, chapterEnd, versionId]
+  );
+  const totalSelectedVerses = useMemo(
+    () =>
+      getPassageVerseCount(
+        bookId,
+        chapterStart,
+        chapterEnd,
+        verseStart,
+        verseEnd,
+        versionId
+      ),
+    [bookId, chapterStart, chapterEnd, verseStart, verseEnd, versionId]
+  );
+  const inFlightTitle = useMemo(
+    () =>
+      getDocTitle(
+        bookId,
+        chapterStart,
+        chapterEnd,
+        versionId,
+        verseStart,
+        verseEnd
+      ),
+    [bookId, chapterStart, chapterEnd, versionId, verseStart, verseEnd]
+  );
 
   // Check if formatting options differ from saved defaults
   const isFormattingDirty = useMemo(() => {
@@ -354,9 +408,15 @@ export default function Home() {
   const policyCheck = useMemo(
     () =>
       versionId === "ESV"
-        ? validateEsvPassageRange(bookId, chapterStart, chapterEnd)
+        ? validateEsvPassageRange(
+            bookId,
+            chapterStart,
+            chapterEnd,
+            verseStart,
+            verseEnd
+          )
         : { allowed: true },
-    [versionId, bookId, chapterStart, chapterEnd]
+    [versionId, bookId, chapterStart, chapterEnd, verseStart, verseEnd]
   );
 
   // Initial client hydration: URL Params > Local Session > User Saved Defaults > System Defaults
@@ -395,11 +455,15 @@ export default function Home() {
         bookId: string;
         chapterStart: number;
         chapterEnd: number;
+        verseStart?: number;
+        verseEnd?: number;
       }>(STORAGE_KEYS.LAST_PASSAGE);
 
       const localCurrentVersion = readStorageString(
         STORAGE_KEYS.CURRENT_VERSION
       );
+      const localShowVerses =
+        readStorageString(STORAGE_KEYS.SHOW_VERSES) === "1";
 
       // 4. Resolve initial values
       const initialVersion =
@@ -423,6 +487,39 @@ export default function Home() {
         localPassage?.chapterEnd ??
         1;
 
+      const maxInitialStartV =
+        getChapterVerseCount(initialBookId, initialStart, initialVersion) || 1;
+      const maxInitialEndV =
+        getChapterVerseCount(initialBookId, initialEnd, initialVersion) || 1;
+
+      const hasUrlVerseParams =
+        urlSettings.verseStart !== undefined ||
+        urlSettings.verseEnd !== undefined;
+      const initialShowVerses = hasUrlVerseParams ? true : localShowVerses;
+
+      let initialVerseStart = 1;
+      let initialVerseEnd = maxInitialEndV;
+
+      if (urlSettings.hasUrlSettings) {
+        initialVerseStart = urlSettings.verseStart
+          ? Math.min(urlSettings.verseStart, maxInitialStartV)
+          : 1;
+        initialVerseEnd = urlSettings.verseEnd
+          ? Math.min(urlSettings.verseEnd, maxInitialEndV)
+          : maxInitialEndV;
+      } else if (initialShowVerses && localPassage) {
+        initialVerseStart = localPassage.verseStart
+          ? Math.min(Math.max(1, localPassage.verseStart), maxInitialStartV)
+          : 1;
+        initialVerseEnd = localPassage.verseEnd
+          ? Math.min(Math.max(1, localPassage.verseEnd), maxInitialEndV)
+          : maxInitialEndV;
+      }
+
+      if (initialStart === initialEnd && initialVerseStart > initialVerseEnd) {
+        initialVerseEnd = initialVerseStart;
+      }
+
       // Formatting options: URL params override active session & defaults for this load without wiping defaults
       const baseOptions = localCurrentOptions || localDefaults.options;
       const initialOptions: FormatOptions = {
@@ -437,6 +534,9 @@ export default function Home() {
       setBookId(initialBookId);
       setChapterStart(initialStart);
       setChapterEnd(initialEnd);
+      setVerseStart(initialVerseStart);
+      setVerseEnd(initialVerseEnd);
+      setShowVerseSelector(initialShowVerses);
       setOptions(initialOptions);
       setIsHydrated(true);
 
@@ -479,9 +579,20 @@ export default function Home() {
 
             // If no URL settings were present and no active session storage, restore passage from DB
             if (!urlSettings.hasUrlSettings && !localPassage && dbPref.lastBookId) {
-              setBookId(dbPref.lastBookId);
-              if (dbPref.lastChapterStart) setChapterStart(dbPref.lastChapterStart);
-              if (dbPref.lastChapterEnd) setChapterEnd(dbPref.lastChapterEnd);
+              const restoredBook = dbPref.lastBookId;
+              const restoredStart = dbPref.lastChapterStart || 1;
+              const restoredEnd = dbPref.lastChapterEnd || restoredStart;
+              setBookId(restoredBook);
+              setChapterStart(restoredStart);
+              setChapterEnd(restoredEnd);
+              setVerseStart(1);
+              setVerseEnd(
+                getChapterVerseCount(
+                  restoredBook,
+                  restoredEnd,
+                  mergedDefaults.version
+                )
+              );
             }
           }
         } else {
@@ -519,6 +630,8 @@ export default function Home() {
       bookId,
       chapterStart,
       chapterEnd,
+      verseStart,
+      verseEnd,
     });
 
     // Debounced sync to database if logged in
@@ -536,7 +649,7 @@ export default function Home() {
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [bookId, chapterStart, chapterEnd, isHydrated, user]);
+  }, [bookId, chapterStart, chapterEnd, verseStart, verseEnd, isHydrated, user]);
 
   // Handle saving current formatting options as personal defaults
   const handleSaveDefaults = async () => {
@@ -604,8 +717,22 @@ export default function Home() {
 
   // Handle resetting active Bible version to saved default version
   const handleResetDefaultVersion = () => {
-    setVersionId(savedDefaults.version);
+    handleVersionChange(savedDefaults.version);
     writeStorageString(STORAGE_KEYS.CURRENT_VERSION, savedDefaults.version);
+  };
+
+  // Handle Bible version change (adjusting max verse if on a chapter with versification differences)
+  const handleVersionChange = (newVersion: string) => {
+    const oldMaxEnd = getChapterVerseCount(bookId, chapterEnd, versionId);
+    const newMaxStart = getChapterVerseCount(bookId, chapterStart, newVersion);
+    const newMaxEnd = getChapterVerseCount(bookId, chapterEnd, newVersion);
+    setVersionId(newVersion);
+    if (verseStart > newMaxStart) {
+      setVerseStart(newMaxStart);
+    }
+    if (verseEnd === oldMaxEnd || verseEnd > newMaxEnd) {
+      setVerseEnd(newMaxEnd);
+    }
   };
 
   // Handle book selection change
@@ -613,27 +740,73 @@ export default function Home() {
     setBookId(newBookId);
     setChapterStart(1);
     setChapterEnd(1);
+    setVerseStart(1);
+    setVerseEnd(getChapterVerseCount(newBookId, 1, versionId));
   };
 
   // Handle whole book selection
   const handleSelectWholeBook = () => {
+    const lastCh = chapters.length;
     setChapterStart(1);
-    setChapterEnd(chapters.length);
+    setChapterEnd(lastCh);
+    setVerseStart(1);
+    setVerseEnd(getChapterVerseCount(bookId, lastCh, versionId));
   };
 
-  // Handle single chapter lock
+  // Handle First Chapter change (resets First Verse to 1)
   const handleChapterStartChange = (val: number) => {
     setChapterStart(val);
+    setVerseStart(1);
     if (val > chapterEnd) {
       setChapterEnd(val);
+      setVerseEnd(getChapterVerseCount(bookId, val, versionId));
     }
   };
 
+  // Handle Last Chapter change (resets Last Verse to last verse of that chapter)
   const handleChapterEndChange = (val: number) => {
     setChapterEnd(val);
+    setVerseEnd(getChapterVerseCount(bookId, val, versionId));
     if (val < chapterStart) {
       setChapterStart(val);
+      setVerseStart(1);
     }
+  };
+
+  // Handle First Verse change
+  const handleVerseStartChange = (val: number) => {
+    setVerseStart(val);
+    if (chapterStart === chapterEnd && val > verseEnd) {
+      setVerseEnd(val);
+    }
+  };
+
+  // Handle Last Verse change
+  const handleVerseEndChange = (val: number) => {
+    setVerseEnd(val);
+    if (chapterStart === chapterEnd && val < verseStart) {
+      setVerseStart(val);
+    }
+  };
+
+  // Handle selecting all verses in the selected chapter(s)
+  const handleSelectWholeChapters = () => {
+    setVerseStart(1);
+    setVerseEnd(getChapterVerseCount(bookId, chapterEnd, versionId));
+  };
+
+  // Expand verse selection and remember setting
+  const handleExpandVerses = () => {
+    setShowVerseSelector(true);
+    writeStorageString(STORAGE_KEYS.SHOW_VERSES, "1");
+  };
+
+  // Hide verse selection, remember setting, and reset verses to complete chapter(s)
+  const handleHideVerses = () => {
+    setShowVerseSelector(false);
+    writeStorageString(STORAGE_KEYS.SHOW_VERSES, "0");
+    setVerseStart(1);
+    setVerseEnd(getChapterVerseCount(bookId, chapterEnd, versionId));
   };
 
   // Trigger Doc Creation
@@ -665,6 +838,14 @@ export default function Home() {
 
     try {
       const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const isPartial = isPartialVerseSelection(
+        bookId,
+        chapterStart,
+        chapterEnd,
+        verseStart,
+        verseEnd,
+        versionId
+      );
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -672,6 +853,8 @@ export default function Home() {
           bookId,
           chapterStart,
           chapterEnd,
+          verseStart,
+          verseEnd,
           version: versionId,
           options,
           timeZone: userTimeZone,
@@ -768,6 +951,7 @@ export default function Home() {
         bookId,
         chapterStart,
         chapterEnd,
+        ...(isPartial ? { verseStart, verseEnd } : {}),
         options: { ...options },
       };
       setCreatedDoc(newDocSnapshot);
@@ -780,6 +964,7 @@ export default function Home() {
           bookId,
           chapterStart,
           chapterEnd,
+          ...(isPartial ? { verseStart, verseEnd } : {}),
           options: { ...options },
           createdAt: new Date().toISOString(),
         },
@@ -806,6 +991,8 @@ export default function Home() {
     itemBookId: string,
     itemStart: number,
     itemEnd: number,
+    itemVerseStart?: number,
+    itemVerseEnd?: number,
     itemOptions?: Partial<FormatOptions> | null
   ) => {
     try {
@@ -815,6 +1002,8 @@ export default function Home() {
         bookId: itemBookId,
         chapterStart: itemStart,
         chapterEnd: itemEnd,
+        verseStart: itemVerseStart,
+        verseEnd: itemVerseEnd,
         options: itemOptions,
       });
       await navigator.clipboard.writeText(url);
@@ -1011,7 +1200,7 @@ export default function Home() {
               <select
                 className="field-select"
                 value={versionId}
-                onChange={(e) => setVersionId(e.target.value)}
+                onChange={(e) => handleVersionChange(e.target.value)}
               >
                 {SUPPORTED_VERSIONS.map((v) => (
                   <option key={v.id} value={v.abbr} disabled={!v.enabled}>
@@ -1088,6 +1277,87 @@ export default function Home() {
                 ))}
               </select>
             </div>
+
+            {/* Verse Selection (Collapsed Summary or Expanded First/Last Verse Dropdowns) */}
+            {!showVerseSelector ? (
+              <div className="verse-summary-row full-width">
+                <span className="verse-summary-text">
+                  {chapterStart === chapterEnd
+                    ? `Entire chapter (${totalSelectedVerses} ${
+                        totalSelectedVerses === 1 ? "verse" : "verses"
+                      })`
+                    : `Entire chapters (${totalSelectedVerses} verses)`}
+                </span>
+                <span className="verse-summary-dot" aria-hidden="true">
+                  •
+                </span>
+                <button
+                  type="button"
+                  onClick={handleExpandVerses}
+                  className="btn-link"
+                >
+                  Select verses
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Verse Start */}
+                <div className="field-group">
+                  <div className="field-header-row">
+                    <label className="field-label">First Verse</label>
+                    <button
+                      type="button"
+                      onClick={handleHideVerses}
+                      className="btn-link"
+                    >
+                      Hide verses
+                    </button>
+                  </div>
+                  <select
+                    className="field-select"
+                    value={verseStart}
+                    onChange={(e) =>
+                      handleVerseStartChange(Number(e.target.value))
+                    }
+                  >
+                    {startChapterVerses.map((v) => (
+                      <option key={v} value={v}>
+                        Verse {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Verse End */}
+                <div className="field-group">
+                  <div className="field-header-row">
+                    <label className="field-label">Last Verse</label>
+                    <button
+                      type="button"
+                      onClick={handleSelectWholeChapters}
+                      className="btn-link"
+                    >
+                      {chapterStart === chapterEnd
+                        ? "Select entire chapter"
+                        : "Select entire chapters"}
+                    </button>
+                  </div>
+                  <select
+                    className="field-select"
+                    value={verseEnd}
+                    onChange={(e) =>
+                      handleVerseEndChange(Number(e.target.value))
+                    }
+                  >
+                    {endChapterVerses.map((v) => (
+                      <option key={v} value={v}>
+                        Verse {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
 
             {/* Crossway ESV Policy Range Notice */}
             {!policyCheck.allowed && (

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GoogleLogo } from "@/components/GoogleLogo";
-import { SUPPORTED_VERSIONS } from "@/lib/bible/books";
+import { SUPPORTED_VERSIONS, getPassageTitle } from "@/lib/bible/books";
 
 interface AdminStats {
   totalExecutions: number;
@@ -42,6 +42,7 @@ interface AdminStats {
     pageBreaksCount: number;
     verseNumbersCount: number;
     chapterHeadersCount: number;
+    verseSelectionCount?: number;
     topFonts: Array<{ fontName: string; count: number }>;
   };
   topUsers?: Array<{
@@ -52,9 +53,12 @@ interface AdminStats {
   cacheStats?: Array<{ versionAbbr: string; count: number }>;
   recent: Array<{
     id: string;
+    bookId?: string;
     bookName: string;
     chapterStart: number;
     chapterEnd: number;
+    verseStart?: number;
+    verseEnd?: number;
     versionAbbr: string;
     userEmail: string | null;
     docUrl: string;
@@ -401,6 +405,13 @@ export default function AdminPage() {
           <div className="metric-value">{multiPercentage}%</div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-subtle)" }}>
             {multiCount.toLocaleString()} multi vs {singleCount.toLocaleString()} single chapter
+            {optTotals > 0 && (
+              <>
+                {" • "}
+                {(stats?.optionsBreakdown?.verseSelectionCount || 0).toLocaleString()} verse-subset (
+                {pct(stats?.optionsBreakdown?.verseSelectionCount || 0)}% of v2)
+              </>
+            )}
           </div>
         </div>
 
@@ -608,6 +619,12 @@ export default function AdminPage() {
               {
                 label: "Title page",
                 val: pct(stats?.optionsBreakdown?.titlePageCount || 0),
+              },
+              {
+                label: `Specific verses selected (${
+                  stats?.optionsBreakdown?.verseSelectionCount || 0
+                } of ${optTotals} runs)`,
+                val: pct(stats?.optionsBreakdown?.verseSelectionCount || 0),
               },
             ].map((opt) => (
               <div key={opt.label} style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
@@ -862,8 +879,20 @@ export default function AdminPage() {
                     })}
                   </td>
                   <td style={{ fontWeight: 600 }}>
-                    {item.bookName} {item.chapterStart}
-                    {item.chapterStart !== item.chapterEnd ? `-${item.chapterEnd}` : ""}
+                    {item.bookId && (item.verseStart || item.verseEnd)
+                      ? getPassageTitle(
+                          item.bookId,
+                          item.chapterStart,
+                          item.chapterEnd,
+                          item.verseStart,
+                          item.verseEnd,
+                          item.versionAbbr
+                        )
+                      : `${item.bookName} ${item.chapterStart}${
+                          item.chapterStart !== item.chapterEnd
+                            ? `-${item.chapterEnd}`
+                            : ""
+                        }`}
                   </td>
                   <td>
                     <span style={{ padding: "0.2rem 0.5rem", borderRadius: "4px", background: "var(--bg-glass)", fontSize: "0.75rem" }}>

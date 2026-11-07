@@ -43,24 +43,39 @@ export async function GET() {
       .orderBy(desc(executions.createdAt))
       .limit(100);
 
-    const history = rows.map((row) => ({
-      id: row.id,
-      docId: row.docId,
-      docUrl: row.docUrl,
-      docName: getDocTitle(
-        row.bookId,
-        row.chapterStart,
-        row.chapterEnd,
-        row.versionAbbr
-      ),
-      versionAbbr: row.versionAbbr,
-      bookId: row.bookId,
-      bookName: row.bookName,
-      chapterStart: row.chapterStart,
-      chapterEnd: row.chapterEnd,
-      options: row.optionsJson,
-      createdAt: row.createdAt,
-    }));
+    const history = rows.map((row) => {
+      const rawOpts = (row.optionsJson || {}) as {
+        verseStart?: number;
+        verseEnd?: number;
+      };
+      const verseStart =
+        typeof rawOpts.verseStart === "number" ? rawOpts.verseStart : undefined;
+      const verseEnd =
+        typeof rawOpts.verseEnd === "number" ? rawOpts.verseEnd : undefined;
+
+      return {
+        id: row.id,
+        docId: row.docId,
+        docUrl: row.docUrl,
+        docName: getDocTitle(
+          row.bookId,
+          row.chapterStart,
+          row.chapterEnd,
+          row.versionAbbr,
+          verseStart,
+          verseEnd
+        ),
+        versionAbbr: row.versionAbbr,
+        bookId: row.bookId,
+        bookName: row.bookName,
+        chapterStart: row.chapterStart,
+        chapterEnd: row.chapterEnd,
+        verseStart,
+        verseEnd,
+        options: row.optionsJson,
+        createdAt: row.createdAt,
+      };
+    });
 
     return NextResponse.json({
       authenticated: true,
@@ -115,6 +130,7 @@ export async function DELETE(request: Request) {
         bookId: executions.bookId,
         chapterStart: executions.chapterStart,
         chapterEnd: executions.chapterEnd,
+        optionsJson: executions.optionsJson,
       })
       .from(executions)
       .where(
@@ -173,16 +189,28 @@ export async function DELETE(request: Request) {
         bookId: string;
         chapterStart: number;
         chapterEnd: number;
+        verseStart?: number;
+        verseEnd?: number;
       }
     >();
     for (const row of ownedRows) {
-      const pKey = `${row.bookId}:${row.chapterStart}-${row.chapterEnd}:${row.versionAbbr}`;
+      const rawOpts = (row.optionsJson || {}) as {
+        verseStart?: number;
+        verseEnd?: number;
+      };
+      const verseStart =
+        typeof rawOpts.verseStart === "number" ? rawOpts.verseStart : undefined;
+      const verseEnd =
+        typeof rawOpts.verseEnd === "number" ? rawOpts.verseEnd : undefined;
+      const pKey = `${row.bookId}:${row.chapterStart}-${row.chapterEnd}:${verseStart || ""}-${verseEnd || ""}:${row.versionAbbr}`;
       if (!affectedPassages.has(pKey)) {
         affectedPassages.set(pKey, {
           versionAbbr: row.versionAbbr,
           bookId: row.bookId,
           chapterStart: row.chapterStart,
           chapterEnd: row.chapterEnd,
+          verseStart,
+          verseEnd,
         });
       }
     }
@@ -190,8 +218,11 @@ export async function DELETE(request: Request) {
     await Promise.all(
       Array.from(affectedPassages.values()).map(async (p) => {
         try {
-          const remaining = await db!
-            .select({ docId: executions.docId })
+          const candidates = await db!
+            .select({
+              docId: executions.docId,
+              optionsJson: executions.optionsJson,
+            })
             .from(executions)
             .where(
               and(
@@ -205,18 +236,34 @@ export async function DELETE(request: Request) {
               )
             )
             .orderBy(desc(executions.createdAt))
-            .limit(1);
+            .limit(20);
 
-          if (remaining.length > 0 && remaining[0].docId) {
+          const remaining = candidates.find((c) => {
+            const cOpts = (c.optionsJson || {}) as {
+              verseStart?: number;
+              verseEnd?: number;
+            };
+            const cVStart =
+              typeof cOpts.verseStart === "number"
+                ? cOpts.verseStart
+                : undefined;
+            const cVEnd =
+              typeof cOpts.verseEnd === "number" ? cOpts.verseEnd : undefined;
+            return cVStart === p.verseStart && cVEnd === p.verseEnd;
+          });
+
+          if (remaining && remaining.docId) {
             const cleanTitle = getDocTitle(
               p.bookId,
               p.chapterStart,
               p.chapterEnd,
-              p.versionAbbr
+              p.versionAbbr,
+              p.verseStart,
+              p.verseEnd
             );
             await renameGoogleDriveFile(
               authClient,
-              remaining[0].docId,
+              remaining.docId,
               cleanTitle
             );
           }

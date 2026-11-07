@@ -67,6 +67,7 @@ export function parseEsvHtml(
         if (runs.length > 0) {
           paragraphs.push({
             type: "paragraph",
+            isPreVerseHeader: true,
             runs,
           });
         }
@@ -77,6 +78,7 @@ export function parseEsvHtml(
         if (runs.length > 0) {
           paragraphs.push({
             type: "paragraph",
+            isPreVerseHeader: true,
             runs,
           });
         }
@@ -125,6 +127,7 @@ export function parseEsvHtml(
             if (runs.length > 0) {
               paragraphs.push({
                 type: "paragraph",
+                isPreVerseHeader: true,
                 runs,
               });
             }
@@ -135,6 +138,7 @@ export function parseEsvHtml(
             if (runs.length > 0) {
               paragraphs.push({
                 type: "paragraph",
+                isPreVerseHeader: true,
                 runs,
               });
             }

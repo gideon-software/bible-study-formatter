@@ -5,6 +5,8 @@ import {
   VALID_PAGE_MARGINS,
   FormatOptions,
   getBookByNameOrId,
+  getChapterVerseCount,
+  isPartialVerseSelection,
 } from "./books";
 
 export const ALLOWED_FONTS = SUPPORTED_FONT_FAMILIES;
@@ -14,6 +16,8 @@ export interface ParsedUrlSettings {
   bookId?: string;
   chapterStart?: number;
   chapterEnd?: number;
+  verseStart?: number;
+  verseEnd?: number;
   options?: Partial<FormatOptions>;
   hasUrlSettings: boolean;
 }
@@ -108,6 +112,41 @@ export function parseUrlSettings(search: string | URLSearchParams): ParsedUrlSet
   } else if (parsedStart !== undefined) {
     // If only start chapter is specified, default chapterEnd to chapterStart
     result.chapterEnd = parsedStart;
+  }
+
+  // 3b. Verses (e.g. ?vstart=65&vend=72 or ?vs=65&ve=72)
+  const rawVStart =
+    params.get("vstart") || params.get("verseStart") || params.get("vs");
+  const rawVEnd =
+    params.get("vend") || params.get("verseEnd") || params.get("ve");
+
+  const effectiveChStart = result.chapterStart ?? 1;
+  const effectiveChEnd = result.chapterEnd ?? effectiveChStart;
+  const maxVStart = result.bookId
+    ? getChapterVerseCount(result.bookId, effectiveChStart, result.versionId) || 176
+    : 176;
+  const maxVEnd = result.bookId
+    ? getChapterVerseCount(result.bookId, effectiveChEnd, result.versionId) || 176
+    : 176;
+
+  let parsedVStart: number | undefined;
+  if (rawVStart) {
+    const vs = parseInt(rawVStart, 10);
+    if (!isNaN(vs) && vs >= 1) {
+      parsedVStart = Math.min(vs, maxVStart);
+      result.verseStart = parsedVStart;
+      result.hasUrlSettings = true;
+    }
+  }
+
+  if (rawVEnd) {
+    const ve = parseInt(rawVEnd, 10);
+    if (!isNaN(ve) && ve >= 1) {
+      const minV =
+        effectiveChStart === effectiveChEnd ? (parsedVStart ?? 1) : 1;
+      result.verseEnd = Math.min(Math.max(ve, minV), maxVEnd);
+      result.hasUrlSettings = true;
+    }
   }
 
   // 4. Formatting options
@@ -206,6 +245,8 @@ export function buildShareableUrl(params: {
   bookId: string;
   chapterStart: number;
   chapterEnd: number;
+  verseStart?: number;
+  verseEnd?: number;
   options?: Partial<FormatOptions> | null;
 }): string {
   const searchParams = new URLSearchParams();
@@ -213,6 +254,25 @@ export function buildShareableUrl(params: {
   searchParams.set("book", params.bookId);
   searchParams.set("start", String(params.chapterStart));
   searchParams.set("end", String(params.chapterEnd));
+
+  if (
+    isPartialVerseSelection(
+      params.bookId,
+      params.chapterStart,
+      params.chapterEnd,
+      params.verseStart,
+      params.verseEnd,
+      params.versionId
+    )
+  ) {
+    const maxEndV = getChapterVerseCount(
+      params.bookId,
+      params.chapterEnd,
+      params.versionId
+    );
+    searchParams.set("vstart", String(params.verseStart ?? 1));
+    searchParams.set("vend", String(params.verseEnd ?? maxEndV));
+  }
 
   const opt = params.options;
   if (opt) {

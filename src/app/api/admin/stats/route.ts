@@ -162,6 +162,7 @@ export async function GET(request: Request) {
             pageBreaksCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'chapterPageBreaks')::boolean is true)`,
             verseNumbersCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'verseNumbers')::boolean is true)`,
             chapterHeadersCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'chapterHeaders')::boolean is true)`,
+            verseSelectionCount: sql<number>`count(*) filter (where (${executions.optionsJson}->>'verseStart') is not null)`,
           })
           .from(executions)
           .where(v2OptionsClause),
@@ -223,15 +224,26 @@ export async function GET(request: Request) {
       const legacyExecutions = Number(totalsRes[0]?.legacyCount || 0);
       const uniqueUsers = Number(usersRes[0]?.count || 0);
 
-      const recent = recentRows.map((r) => ({
-        ...r,
-        isAdminUser: Boolean(
-          r.userEmail && adminEmails.includes(r.userEmail.toLowerCase())
-        ),
-        isLegacy:
-          !r.userEmail &&
-          (r.optionsJson as { source?: string } | null)?.source === "legacy_v1",
-      }));
+      const recent = recentRows.map((r) => {
+        const rawOpts = (r.optionsJson || {}) as {
+          source?: string;
+          verseStart?: number;
+          verseEnd?: number;
+        };
+        return {
+          ...r,
+          verseStart:
+            typeof rawOpts.verseStart === "number"
+              ? rawOpts.verseStart
+              : undefined,
+          verseEnd:
+            typeof rawOpts.verseEnd === "number" ? rawOpts.verseEnd : undefined,
+          isAdminUser: Boolean(
+            r.userEmail && adminEmails.includes(r.userEmail.toLowerCase())
+          ),
+          isLegacy: !r.userEmail && rawOpts.source === "legacy_v1",
+        };
+      });
 
       return NextResponse.json({
         totalExecutions,
@@ -258,6 +270,7 @@ export async function GET(request: Request) {
           pageBreaksCount: Number(optionsRes[0]?.pageBreaksCount || 0),
           verseNumbersCount: Number(optionsRes[0]?.verseNumbersCount || 0),
           chapterHeadersCount: Number(optionsRes[0]?.chapterHeadersCount || 0),
+          verseSelectionCount: Number(optionsRes[0]?.verseSelectionCount || 0),
           topFonts: topFonts.map((f) => ({
             fontName: f.fontName,
             count: Number(f.count),
@@ -328,6 +341,7 @@ export async function GET(request: Request) {
       pageBreaksCount: 135,
       verseNumbersCount: 140,
       chapterHeadersCount: 141,
+      verseSelectionCount: 18,
       topFonts: [{ fontName: "Arial", count: 120 }],
     },
     topUsers: [],
