@@ -348,6 +348,11 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [authNotice, setAuthNotice] = useState<{
+    title: string;
+    message: string;
+    showGrantButton?: boolean;
+  } | null>(null);
 
   // Available chapters and verses for selected book/chapters
   const chapters = useMemo(() => getBookChapters(bookId), [bookId]);
@@ -424,7 +429,41 @@ export default function Home() {
     let isMounted = true;
 
     async function initSession() {
-      // 1. Parse URL query params
+      // 1. Parse URL query params (including any OAuth callback error)
+      const searchParams = new URLSearchParams(window.location.search);
+      const authError = searchParams.get("auth_error");
+      if (authError) {
+        if (authError === "missing_drive_scope") {
+          setAuthNotice({
+            title: "Google Drive Permission Required",
+            message:
+              "To create and format Google Docs, please sign in again and make sure the Google Drive permission box is checked on Google's consent screen.",
+            showGrantButton: true,
+          });
+        } else if (authError === "access_denied") {
+          setAuthNotice({
+            title: "Google Sign-In Cancelled",
+            message:
+              "Sign-in was cancelled. Sign in with Google and grant Google Drive access whenever you're ready to create a document.",
+            showGrantButton: true,
+          });
+        } else {
+          setAuthNotice({
+            title: "Sign-In Issue",
+            message: `Google sign-in did not complete (${authError}). Please try signing in again.`,
+            showGrantButton: true,
+          });
+        }
+
+        // Remove auth_error from the address bar so refreshing doesn't re-display it
+        searchParams.delete("auth_error");
+        const remainingQuery = searchParams.toString();
+        const cleanUrl = `${window.location.pathname}${
+          remainingQuery ? `?${remainingQuery}` : ""
+        }${window.location.hash}`;
+        window.history.replaceState({}, "", cleanUrl);
+      }
+
       const urlSettings = parseUrlSettings(window.location.search);
 
       // 2. Read saved defaults from localStorage
@@ -823,7 +862,38 @@ export default function Home() {
     setErrorMsg(null);
     setErrorDetails(null);
     setShowErrorDetails(false);
+    setAuthNotice(null);
     setCreatedDoc(null);
+
+    const handleGenerationError = (payload: {
+      needsAuth?: boolean;
+      needsDriveScope?: boolean;
+      error?: string;
+      message?: string;
+      details?: string;
+    }) => {
+      if (payload.needsDriveScope) {
+        setAuthNotice({
+          title: payload.error || "Google Drive Permission Required",
+          message:
+            payload.message ||
+            "Your Google account hasn't granted permission to create documents in Google Drive. Please sign in again and check the Google Drive permission box on Google's consent screen.",
+          showGrantButton: true,
+        });
+        setStatusMessage("");
+        return;
+      }
+      if (payload.needsAuth) {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.href = "/api/auth/google/login";
+        return;
+      }
+      setErrorMsg(payload.message || payload.error || "Generation failed");
+      if (payload.details) {
+        setErrorDetails(payload.details);
+      }
+      setStatusMessage("");
+    };
 
     // Hybrid loading feel: 3+ chapters shows immediately; 1-2 chapters waits 750ms to prevent visual flash
     const totalChapters = chapterEnd - chapterStart + 1;
@@ -863,16 +933,7 @@ export default function Home() {
 
       if (!response.ok) {
         const result = await response.json();
-        if (result.needsAuth) {
-          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-          window.location.href = "/api/auth/google/login";
-          return;
-        }
-        setErrorMsg(result.message || result.error || "Generation failed");
-        if (result.details) {
-          setErrorDetails(result.details);
-        }
-        setStatusMessage("");
+        handleGenerationError(result);
         return;
       }
 
@@ -912,14 +973,7 @@ export default function Home() {
             } else if (data.type === "complete") {
               completedResult = data;
             } else if (data.type === "error") {
-              if (data.needsAuth) {
-                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                window.location.href = "/api/auth/google/login";
-                return;
-              }
-              setErrorMsg(data.message || data.error || "Generation failed");
-              if (data.details) setErrorDetails(data.details);
-              setStatusMessage("");
+              handleGenerationError(data);
               return;
             }
           } catch (parseErr) {
@@ -1155,6 +1209,35 @@ export default function Home() {
           )}
         </div>
       </header>
+
+      {/* OAuth / Drive Scope Notice Banner */}
+      {authNotice && (
+        <div className="glass-panel auth-notice-banner" role="alert">
+          <div className="auth-notice-content">
+            <AlertCircle size={20} className="auth-notice-icon" />
+            <div>
+              <div className="auth-notice-title">{authNotice.title}</div>
+              <p className="auth-notice-message">{authNotice.message}</p>
+            </div>
+          </div>
+          <div className="auth-notice-actions">
+            {authNotice.showGrantButton && (
+              <a href="/api/auth/google/login" className="btn-google">
+                <GoogleLogo size={16} /> Grant Google Drive Access
+              </a>
+            )}
+            <button
+              type="button"
+              className="auth-notice-dismiss"
+              onClick={() => setAuthNotice(null)}
+              aria-label="Dismiss notice"
+              title="Dismiss"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Two-Column Grid */}
       <div className="app-grid">

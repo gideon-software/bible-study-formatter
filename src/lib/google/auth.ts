@@ -121,11 +121,83 @@ export function isAdminEmail(email?: string | null): boolean {
   return getAdminEmails().includes(email.trim().toLowerCase());
 }
 
+export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
 export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/drive.file",
+  DRIVE_FILE_SCOPE,
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
 ];
+
+/**
+ * Checks whether the space-delimited OAuth scope string returned by Google
+ * includes permission to create and edit Google Docs/Drive files.
+ */
+export function hasRequiredDriveScope(grantedScope?: string | null): boolean {
+  if (!grantedScope) return false;
+  const scopes = grantedScope.split(/\s+/).filter(Boolean);
+  return (
+    scopes.includes(DRIVE_FILE_SCOPE) ||
+    scopes.includes("https://www.googleapis.com/auth/drive") ||
+    scopes.includes("https://www.googleapis.com/auth/documents")
+  );
+}
+
+export type GoogleAuthErrorKind = "expired" | "insufficient_scope";
+
+/**
+ * Classifies Google API OAuth errors into expired credentials (401) or
+ * missing/ungranted OAuth scopes (403 ACCESS_TOKEN_SCOPE_INSUFFICIENT).
+ */
+export function classifyGoogleAuthError(err: unknown): GoogleAuthErrorKind | null {
+  const details = err instanceof Error ? err.message : String(err);
+  const lowerDetails = details.toLowerCase();
+
+  const errObj =
+    typeof err === "object" && err !== null
+      ? (err as {
+          code?: unknown;
+          status?: unknown;
+          errors?: Array<{ reason?: string }>;
+          response?: {
+            status?: unknown;
+            data?: {
+              error?: {
+                status?: string;
+                details?: Array<{ reason?: string }>;
+              };
+            };
+          };
+        })
+      : null;
+
+  const statusCode = errObj?.code ?? errObj?.status ?? errObj?.response?.status;
+  const hasScopeReason =
+    errObj?.errors?.some((e) => e.reason === "ACCESS_TOKEN_SCOPE_INSUFFICIENT") ||
+    errObj?.response?.data?.error?.details?.some(
+      (d) => d.reason === "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
+    );
+
+  if (
+    lowerDetails.includes("insufficient authentication scopes") ||
+    details.includes("ACCESS_TOKEN_SCOPE_INSUFFICIENT") ||
+    hasScopeReason
+  ) {
+    return "insufficient_scope";
+  }
+
+  if (
+    details.includes("invalid authentication credentials") ||
+    details.includes("invalid_grant") ||
+    details.includes("Invalid Credentials") ||
+    details.includes("Unauthorized") ||
+    statusCode === 401
+  ) {
+    return "expired";
+  }
+
+  return null;
+}
 
 export function resolveRedirectUri(request: Request): string {
   if (process.env.GOOGLE_REDIRECT_URI) {

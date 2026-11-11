@@ -20,6 +20,7 @@ import {
   renameGoogleDriveFile,
 } from "@/lib/google/docs";
 import {
+  classifyGoogleAuthError,
   getAuthenticatedClient,
   parseSessionCookie,
   SESSION_COOKIE_NAME,
@@ -34,6 +35,56 @@ import {
   releaseInFlightLock,
   recordRateLimitEvents,
 } from "@/lib/bible/rateLimit";
+
+function buildGenerateErrorPayload(err: unknown): {
+  status: number;
+  shouldAlert: boolean;
+  payload: {
+    error: string;
+    message: string;
+    needsAuth?: boolean;
+    needsDriveScope?: boolean;
+  };
+} {
+  const details = err instanceof Error ? err.message : String(err);
+  const authErrorKind = classifyGoogleAuthError(err);
+
+  if (authErrorKind === "insufficient_scope") {
+    return {
+      status: 403,
+      shouldAlert: false,
+      payload: {
+        error: "Google Drive Permission Required",
+        message:
+          "Your Google account hasn't granted permission to create documents in Google Drive. Please sign in again and check the Google Drive permission box on Google's consent screen.",
+        needsDriveScope: true,
+      },
+    };
+  }
+
+  if (authErrorKind === "expired") {
+    return {
+      status: 401,
+      shouldAlert: false,
+      payload: {
+        error: "Authentication required",
+        message: "Your Google session has expired. Please sign in again.",
+        needsAuth: true,
+      },
+    };
+  }
+
+  return {
+    status: 500,
+    shouldAlert: true,
+    payload: {
+      error: "Generation Failed",
+      message:
+        details || "An unexpected error occurred while creating your document.",
+      needsAuth: false,
+    },
+  };
+}
 
 export async function POST(request: Request) {
   const startTime = Date.now();
@@ -464,20 +515,11 @@ export async function POST(request: Request) {
           controller.close();
         } catch (streamErr: unknown) {
           console.error("[Generate] Stream generation failure:", streamErr);
-          const details = streamErr instanceof Error ? streamErr.message : String(streamErr);
+          const details =
+            streamErr instanceof Error ? streamErr.message : String(streamErr);
+          const { shouldAlert, payload } = buildGenerateErrorPayload(streamErr);
 
-          // Check if error is due to expired Google credentials
-          const isAuthError =
-            details.includes("invalid authentication credentials") ||
-            details.includes("invalid_grant") ||
-            details.includes("Invalid Credentials") ||
-            details.includes("Unauthorized") ||
-            (typeof streamErr === "object" &&
-              streamErr !== null &&
-              "code" in streamErr &&
-              (streamErr as { code: unknown }).code === 401);
-
-          if (!isAuthError) {
+          if (shouldAlert) {
             await sendAlert({
               type: "api_error",
               title: "Document Generation Failed",
@@ -487,11 +529,7 @@ export async function POST(request: Request) {
 
           send({
             type: "error",
-            error: isAuthError ? "Authentication required" : "Generation Failed",
-            message: isAuthError
-              ? "Your Google session has expired. Please sign in again."
-              : details || "An unexpected error occurred while creating your document.",
-            needsAuth: isAuthError,
+            ...payload,
           });
 
           controller.close();
@@ -525,43 +563,17 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     console.error("[Generate] Doc generation failure:", error);
     const details = error instanceof Error ? error.message : String(error);
+    const { status, shouldAlert, payload } = buildGenerateErrorPayload(error);
 
-    // Check if error is due to expired Google credentials
-    const isAuthError =
-      details.includes("invalid authentication credentials") ||
-      details.includes("invalid_grant") ||
-      details.includes("Invalid Credentials") ||
-      details.includes("Unauthorized") ||
-      (typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        (error as { code: unknown }).code === 401);
-
-    if (isAuthError) {
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          message: "Your Google session has expired. Please sign in again.",
-          needsAuth: true,
-        },
-        { status: 401 }
-      );
+    if (shouldAlert) {
+      await sendAlert({
+        type: "api_error",
+        title: "Document Generation Failed",
+        details,
+      });
     }
 
-    // Send immediate failure alert
-    await sendAlert({
-      type: "api_error",
-      title: "Document Generation Failed",
-      details,
-    });
-
-    return NextResponse.json(
-      {
-        error: "Generation Failed",
-        message: details || "An unexpected error occurred while creating your document.",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json(payload, { status });
   } finally {
     if (lockAcquired && userEmailForLock) {
       releaseInFlightLock(userEmailForLock);

@@ -1446,6 +1446,70 @@ body {
   margin-top: 0.5rem;
 }
 
+.auth-notice-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  border-color: rgba(244, 63, 94, 0.35);
+  background: rgba(244, 63, 94, 0.08);
+}
+
+.auth-notice-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex: 1 1 320px;
+}
+
+.auth-notice-icon {
+  color: var(--accent-rose);
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.auth-notice-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  margin-bottom: 0.2rem;
+}
+
+.auth-notice-message {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.auth-notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.auth-notice-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-glass);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.auth-notice-dismiss:hover {
+  background: var(--bg-glass);
+  color: var(--text-main);
+}
+
 .doc-link-name {
   font-weight: 600;
   font-size: 0.9rem;

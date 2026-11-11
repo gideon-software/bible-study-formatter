@@ -4,6 +4,9 @@ import {
   serializeSessionCookie,
   parseSessionCookie,
   isAdminEmail,
+  hasRequiredDriveScope,
+  classifyGoogleAuthError,
+  DRIVE_FILE_SCOPE,
   SessionData,
 } from "./auth";
 
@@ -56,5 +59,59 @@ describe("Google Auth & Signed Session Cookie Utilities", () => {
     } finally {
       process.env.ADMIN_EMAILS = prev;
     }
+  });
+
+  it("verifies whether granted OAuth scopes include drive.file", () => {
+    assert.equal(
+      hasRequiredDriveScope(
+        `${DRIVE_FILE_SCOPE} https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile`
+      ),
+      true
+    );
+    assert.equal(
+      hasRequiredDriveScope(
+        "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+      ),
+      false
+    );
+    assert.equal(hasRequiredDriveScope(""), false);
+    assert.equal(hasRequiredDriveScope(undefined), false);
+    // Prefix lookalike must not match
+    assert.equal(
+      hasRequiredDriveScope("https://www.googleapis.com/auth/drive.file.readonly"),
+      false
+    );
+  });
+
+  it("classifies insufficient scope errors vs expired credential errors", () => {
+    assert.equal(
+      classifyGoogleAuthError(
+        new Error("Request had insufficient authentication scopes.")
+      ),
+      "insufficient_scope"
+    );
+    assert.equal(
+      classifyGoogleAuthError({
+        code: 403,
+        message: "Insufficient Permission",
+        errors: [{ reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT" }],
+      }),
+      "insufficient_scope"
+    );
+    assert.equal(
+      classifyGoogleAuthError({
+        code: 401,
+        message: "Invalid Credentials",
+      }),
+      "expired"
+    );
+    assert.equal(
+      classifyGoogleAuthError(new Error("invalid_grant")),
+      "expired"
+    );
+    assert.equal(
+      classifyGoogleAuthError(new Error("ESV API timeout")),
+      null
+    );
   });
 });
