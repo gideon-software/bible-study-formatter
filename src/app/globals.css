@@ -696,18 +696,27 @@ body {
 }
 
 .doc-sheet {
-  background: #ffffff;
-  color: #1a1a1a;
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
   padding: 2.25rem;
   min-height: 380px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
   gap: 0;
   line-height: 2;
   overflow-y: auto;
   max-height: 480px;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+[data-theme="light"] .doc-sheet {
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
 }
 
 .doc-sheet p {
@@ -726,7 +735,11 @@ body {
   margin-top: 1.5rem;
   margin-bottom: 1.5rem;
   padding-bottom: 1.5rem;
-  border-bottom: 2px dashed #e2e8f0;
+  border-bottom: 2px dashed #334155;
+}
+
+[data-theme="light"] .doc-title-page-preview {
+  border-bottom-color: #e2e8f0;
 }
 
 .doc-title-page-preview h2 {
@@ -739,8 +752,12 @@ body {
 .doc-title-page-preview p {
   font-size: 11pt;
   font-style: italic;
-  color: #64748b;
+  color: #94a3b8;
   line-height: 1.4;
+}
+
+[data-theme="light"] .doc-title-page-preview p {
+  color: #64748b;
 }
 
 .doc-heading-preview {
@@ -754,6 +771,10 @@ body {
   font-size: 0.75em;
   vertical-align: super;
   font-weight: bold;
+  color: #94a3b8;
+}
+
+[data-theme="light"] .doc-verse-num {
   color: #4b5563;
 }
 
